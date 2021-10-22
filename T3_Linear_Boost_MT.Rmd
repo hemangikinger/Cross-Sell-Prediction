@@ -1,0 +1,249 @@
+---
+title: "Data Science - Mid-term Project"
+author: "T3 - Linear Boost"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+  code_folding: hide
+number_sections: true
+toc: yes
+toc_float: yes
+pdf_document:
+  toc: yes
+toc_depth: '3'
+---
+
+```{r init, include=F}
+# The package "ezids" (EZ Intro to Data Science) includes a lot of the helper functions we developed for the course. 
+# Some of the frequently used functions are loadPkg(), xkabledply(), xkablesummary(), uzscale(), etc.
+# Once installed, load the library.
+library(ezids)
+library(tidyverse)
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+## Cross-Sell RAW Data
+
+```{r cross-sell RAW Data}
+
+vehicle <- read.csv("train.csv")
+
+str(vehicle)
+
+```
+
+## Basic EDA
+
+```{r Data Distribution}
+
+xkabledply(summary(vehicle))
+
+paste0("We will be able to get a idea on the outliers here by the percentiles ( In the Annual_Premium the 3rd quartile is 39400 and the max is 540165 this represents the outliers in this column)")
+
+```
+
+## Response Variable Trend
+```{r Response variable}
+
+vehicle %>% ggplot(aes(x=Response)) +geom_bar(stat = "count") + ggtitle("Response Variable Count")
+
+
+paste0("By the plot we can say that there's imbalance in response. The individuals interested is 87 % as compared to the other one")
+```
+
+## All Variables - Trends
+
+```{r Trends in all variables}
+
+vehicle %>% ggplot(aes(x=Gender)) +geom_bar(stat = "count") + ggtitle("Count of male and female")
+
+g_vs_r <- table(vehicle$Response, vehicle$Gender)
+
+barplot(g_vs_r,
+        main = "Response in Male and female category",
+        xlab = "Male/Female", ylab = "Frequency",
+        col = c("darkblue", "red"),
+        legend.text = rownames(g_vs_r),
+        beside = TRUE)
+
+paste0("Male category is slightly greater than that of female and chances of buying the insurance is also little high")
+
+###########################################################################################################################
+
+vehicle %>% ggplot(aes(x=Age)) +geom_bar(stat = "count") + ggtitle("Count of Age")
+
+plot(density(vehicle$Age))
+
+a_vs_r <- table(vehicle$Response, vehicle$Age)
+
+barplot(a_vs_r,
+        main = "Response with Age",
+        xlab = "Age", ylab = "Frequency",
+        col = c("darkblue", "red"),
+        legend.text = rownames(a_vs_r),
+        beside = TRUE)
+
+paste0("Variable Age looks like right skewed and the count is maximum for age 25")
+
+###########################################################################################################################
+
+vehicle %>% ggplot(aes(x=Driving_License)) +geom_bar(stat = "count") + ggtitle("Count of Driving_License")
+
+dl_vs_r <- table(vehicle$Response, vehicle$Driving_License)
+
+barplot(dl_vs_r,
+        main = "Response with Driving License",
+        xlab = "Driving License - Yes/No", ylab = "Frequency",
+        col = c("darkblue", "red"),
+        legend.text = rownames(dl_vs_r),
+        beside = TRUE)
+
+paste0("99% of customers have driving license and customers interested in Vehicle Insurance have driving license")
+
+###########################################################################################################################
+
+vehicle %>% ggplot(aes(x=Region_Code, col=Region_Code)) +geom_bar(stat = "count") + ggtitle("Count of Region Code")
+
+plot(density(vehicle$Region_Code))
+
+rc_vs_r <- table(vehicle$Response, vehicle$Region_Code)
+
+barplot(rc_vs_r,
+        main = "Response with Region Code",
+        xlab = "Region_Code", ylab = "Frequency",
+        col = c("darkblue", "red"),
+        legend.text = rownames(rc_vs_r),
+        beside = TRUE)
+
+paste0("Region Code 28 seems to have highest customers and also the highest customers interested in vehicle insurance")
+
+###########################################################################################################################
+
+vehicle %>% ggplot(aes(x=Previously_Insured)) +geom_bar(stat = "count") + ggtitle("Count of Previously_Insured")
+
+pi_vs_r <- table(vehicle$Response, vehicle$Previously_Insured)
+
+barplot(pi_vs_r,
+        main = "Response with Previously Insured",
+        xlab = "Previously Insured - Yes/No", ylab = "Frequency",
+        col = c("darkblue", "red"),
+        legend.text = rownames(pi_vs_r),
+        beside = TRUE)
+
+paste0("Customer who don't have an insurance are higher in number than those who have insurance. Also they are more likely to buy the insurance.")
+
+###########################################################################################################################
+
+vehicle %>% ggplot(aes(x=Vehicle_Age)) +geom_bar(stat = "count") + ggtitle("Count of Vehicle_Age")
+
+va_vs_r <- table(vehicle$Response, vehicle$Vehicle_Age)
+
+barplot(va_vs_r,
+        main = "Response with Vehicle Age",
+        xlab = "Vehicle Age", ylab = "Frequency",
+        col = c("darkblue", "red"),
+        legend.text = rownames(va_vs_r),
+        beside = TRUE)
+
+paste0("Customer who own a vehicle for more than 2 years are not many but some of them are interested in getting vehicle insurance. Mostly customers with vehicle for 1-2 years are interested in vehicle insurance.")
+
+###########################################################################################################################
+
+vehicle %>% ggplot(aes(x=Vehicle_Damage)) +geom_bar(stat = "count") + ggtitle("Count of Vehicle_Damage")
+
+vd_vs_r <- table(vehicle$Response, vehicle$Vehicle_Damage)
+
+barplot(vd_vs_r,
+        main = "Response with Vehicle Damage",
+        xlab = "Vehicle Damage", ylab = "Frequency",
+        col = c("darkblue", "red"),
+        legend.text = rownames(vd_vs_r),
+        beside = TRUE)
+
+paste0("The distribution of customers with or without vehicle damage is almost same. The ones with vehicle damage are more interested in vehicle insurance.")
+
+###########################################################################################################################
+
+vehicle %>% ggplot(aes(x=Annual_Premium)) +geom_bar(stat = "count") + ggtitle("Count of Annual_Premium")
+
+plot(density(vehicle$Annual_Premium))
+
+paste0("No clear trend emerges in Annual Premium. We check the data for outliers.")
+
+outlierKD2(vehicle, Annual_Premium, rm =T)
+
+plot(density(vehicle$Annual_Premium))
+
+paste0("We can see from graph comparison above that there are a lot of outliers in for Annual Premium. We remove them and see what trend emerges.")
+
+###########################################################################################################################
+
+vehicle %>% ggplot(aes(x=Policy_Sales_Channel)) +geom_bar(stat = "count") + ggtitle("Count of Policy_Sales_Channel")
+
+plot(density(vehicle$Policy_Sales_Channel))
+
+psc_vs_r <- table(vehicle$Response, vehicle$Policy_Sales_Channel)
+
+barplot(psc_vs_r,
+        main = "Response with Policy Sales Channel",
+        xlab = "Policy Sales Channel", ylab = "Frequency",
+        col = c("darkblue", "red"),
+        legend.text = rownames(psc_vs_r),
+        beside = TRUE)
+
+###########################################################################################################################
+
+vehicle %>% ggplot(aes(x=Vintage)) +geom_bar(stat = "count") + ggtitle("Count of Vintage")
+
+plot(density(vehicle$Vintage))
+
+vt_vs_r <- table(vehicle$Response, vehicle$Vintage)
+
+barplot(vt_vs_r,
+        main = "Response with Vintage",
+        xlab = "Vintage", ylab = "Frequency",
+        col = c("darkblue", "red"),
+        legend.text = rownames(vt_vs_r),
+        beside = TRUE)
+
+###########################################################################################################################
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
