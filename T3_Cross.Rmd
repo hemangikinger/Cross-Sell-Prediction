@@ -1,0 +1,220 @@
+---
+title: "Cross_Sanchez_Sara"
+author: "Sanchez_Sara"
+date: "10/21/2021"
+output: html_document
+---
+```{r init, include=F}
+# The package "ezids" (EZ Intro to Data Science) includes a lot of the helper functions we developed for the course. 
+# Some of the frequently used functions are loadPkg(), xkabledply(), xkablesummary(), uzscale(), etc.
+# Once installed, load the library.
+library(ezids)
+```
+
+#Data Frame - Variables and observations
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+# data.frame(read.csv)
+# str(train)
+train<-read.csv("train.csv")
+str(train)
+```
+
+#Make sure that some variables are stored as factor
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+train$Response =as.factor(train$Response)
+train$Driving_License =as.factor(train$Driving_License)
+train$Previously_Insured =as.factor(train$Previously_Insured)
+```
+
+#remove outliers
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+library(ezids)
+outlierKD2(df=train,var=Age,rm=FALSE) 
+
+```
+
+
+#UNIVARIATE ANALYSIS
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+library(ggplot2)
+ggplot(train, aes(Gender))+ geom_bar(fill = "blue")
+ggplot(train, aes(Driving_License))+ geom_bar(fill = "blue")
+ggplot(train, aes(Previously_Insured))+ geom_bar(fill = "blue")
+ggplot(train, aes(Vehicle_Age))+ geom_bar(fill = "blue")
+ggplot(train, aes(Vehicle_Damage))+ geom_bar(fill = "blue")
+#ggplot(train, aes(Region_Code))+ geom_bar(fill = "blue")
+ggplot(train, aes(Response))+ geom_bar(fill = "blue")
+```
+
+#Driving License does not give us information as it is quite always in 1,
+#so we shall do not use it
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+library(ggplot2)
+ggplot(train, aes(x=Age)) +   geom_histogram(color="blue", fill="blue")
+ggplot(train, aes(x=Annual_Premium)) +   geom_histogram(color="blue", fill="blue")
+ggplot(train, aes(x=Vintage)) +   geom_histogram(color="blue", fill="blue")
+```
+
+
+
+###### BIVARIATE ANALYSIS #####
+
+#Gender Vs Response 
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(train, aes(x=Gender)) +
+  geom_bar(aes(fill=Response), position="dodge") + 
+  xlab("Gender") +  
+  ggtitle("Policyholders based on Gender and Response") +
+  labs(fill="Response")
+```
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+contable = table(train$Gender, train$Response)
+contable
+
+chitest = chisq.test(contable)
+chitest
+```
+
+#Since p-value <0.05 $ H_0 $ is rejected.
+#It is concluded that the variables Gender 
+#and Response are not independent (they are asociated) and it could be useful
+#to include Vehicle_Damage to predict Response
+
+
+#RegionCode vs Response
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(train, aes(x=Region_Code)) +
+  geom_bar(aes(fill=Response), position="dodge") + 
+  xlab("Region_Code") +  
+  ggtitle("Policyholders based on Region_Code and Response") +
+  labs(fill="Response")
+```
+#Graphically no association is observed between region and response
+
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+contable = table(train$Region_Code, train$Response)
+contable
+
+chitest = chisq.test(contable)
+chitest
+```
+
+#Since p-value <0.05 $ H_0 $ is rejected.
+#It is concluded that Region_Code is not independent (they are asociated) and it could #be useful to include Vehicle_Damage to predict Response
+
+
+#Previously_Insured vs Response
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(train, aes(x=Previously_Insured)) +
+  geom_bar(aes(fill=Response), position="dodge") + 
+  xlab("Previously_Insured") +  
+  ggtitle("Policyholders based on Previously_Insured and Response") +
+  labs(fill="Response")
+
+```
+#If it is Previously_Insured  almost always reject the offer
+
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+contable = table(train$Previously_Insured, train$Response)
+contable
+
+chitest = chisq.test(contable)
+chitest
+```
+
+#It is concluded that the variables Previously_Insured 
+#and Response are not independent (they are asociated) and it could be useful
+#to include Previously_Insured to predict Response
+
+
+###### Vehicle_Age vs Response
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(train, aes(x=Vehicle_Age)) +
+  geom_bar(aes(fill=Response), position="dodge") + 
+  xlab("Vehicle_Age") +  
+  ggtitle("Policyholders based on Vehicle_Age and Response") +
+  labs(fill="Response")
+```
+#Vehicles with less than one year of age probably reject the offer
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+contable = table(train$Vehicle_Age, train$Response)
+contable
+
+chitest = chisq.test(contable)
+chitest
+```
+
+#It is concluded that the variable 'Vehicle_Age' 
+#and Response are not independent (they are asociated) and it could be useful
+#to include Vehicle_Age to predict Response
+
+
+######Vehicle_Damage vs Response
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(train, aes(x=Vehicle_Damage)) +
+  geom_bar(aes(fill=Response), position="dodge") + 
+  xlab("Vehicle_Damage") +  
+  ggtitle("Policyholders based on Vehicle_Damage and Response") +
+  labs(fill="Response")
+```
+
+#Vehicles not damaged probably reject the offer
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+contable = table(train$Vehicle_Damage, train$Response)
+contable
+
+chitest = chisq.test(contable)
+chitest
+```
+
+#Since p-value <0.05 $ H_0 $ is rejected. 
+#It is concluded that the variables Vehicle_Damage 
+#and Response are not independent (they are asociated) and it could be useful
+#to include Vehicle_Damage to predict Response
+
+#Age vs Response
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(train, aes(x = Age, fill = Response)) +   # Draw overlaying histogram
+  geom_histogram(position = "identity", alpha = 0.5, bins = 50)
+
+  ggplot(train,aes(y=Age, x=Response)) +  geom_boxplot() +
+  ggtitle("Policyholders based on Age per Response") +
+  labs(fill="Response")
+  
+  
+  ttest = t.test(train$Age[train$Response==0],train$Age[train$Response==0])
+  ttest
+```
+
+#Annual_Premium vs Response
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(train, aes(x = Annual_Premium, fill = Response)) +  # Draw overlaying histogram
+  geom_histogram(position = "identity", alpha = 0.2, bins = 50)
+
+ggplot(train,aes(y=Annual_Premium, x=Response)) +  geom_boxplot() +
+  ggtitle("Policyholders based on Annual_Premium per Response") +
+  labs(fill="Response")
+```
+
+#Variable Annual_Premium has lot of outliers so we will analyze data also removing outliers
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+train.Outliers=train[which(is.na(train$Annual_Premium)),]
+ggplot(train.Outliers, aes(x=Annual_Premium)) +   geom_histogram(color="blue", fill="blue")
+
+train.Outliers=train[which(!is.na(train$Annual_Premium)),]
+ggplot(train.Outliers, aes(x=Annual_Premium)) +   geom_histogram(color="blue", fill="blue")
+#newData=outlierKD2(df=train.Outliers,var=Annual_Premium,rm=TRUE)
+```
