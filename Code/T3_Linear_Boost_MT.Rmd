@@ -1,0 +1,491 @@
+---
+title: "Data Science - Mid-term Project"
+author: "T3 - Linear Boost"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+  code_folding: hide
+number_sections: true
+toc: yes
+toc_float: yes
+pdf_document:
+  toc: yes
+toc_depth: '3'
+---
+
+```{r init, include=F}
+# The package "ezids" (EZ Intro to Data Science) includes a lot of the helper functions we developed for the course. 
+# Some of the frequently used functions are loadPkg(), xkabledply(), xkablesummary(), uzscale(), etc.
+# Once installed, load the library.
+library(ezids)
+library(tidyverse)
+library(corrplot)
+library("ggplot2")
+library(dplyr) 
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+## Cross-Sell RAW Data
+
+```{r cross-sell RAW Data, echo=FALSE, warning=FALSE}
+
+vehicle<-read.csv("train.csv")
+
+str(vehicle)
+
+```
+
+#Make sure that some variables are stored as factor
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+#vehicle$Response =as.factor(vehicle$Response)
+#vehicle$Driving_License =as.factor(vehicle$Driving_License)
+#vehicle$Previously_Insured =as.factor(vehicle$Previously_Insured)
+```
+
+
+## Basic EDA
+
+```{r Data Distribution}
+
+xkabledply(summary(vehicle))
+
+paste0("We will be able to get a idea on the outliers here by the percentiles ( In the Annual_Premium the 3rd quartile is 39400 and the max is 540165 this represents the outliers in this column)")
+
+```
+
+## Response Variable Trend
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+library(dplyr) 
+vehicle %>% ggplot(aes(x=Response)) +geom_bar(stat = "count") + ggtitle("Response Variable Count")
+
+table(vehicle$Response)/dim(vehicle)[1]  # 12.26%
+
+paste0("By the plot we can say that there's imbalance in response. The individuals interested is 87 % as compared to the other one")
+```
+
+
+#Variable Annual_Premium has lot of outliers so we will analyze data also removing outliers
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+#new ggplot
+ggplot(vehicle,aes(x=as.factor(Response), y= log(Annual_Premium))) +  geom_boxplot() +
+  ggtitle("Policyholders based on Annual_Premium per Response") +
+  labs(fill="Response")
+
+vehicle.Outliers=vehicle[which(!is.na(vehicle$Annual_Premium)),]
+ggplot(vehicle.Outliers, aes(x=Annual_Premium)) +   geom_histogram(color="blue", fill="blue")
+
+Vehicle_new=outlierKD2(df=vehicle.Outliers,var=Annual_Premium,rm=TRUE)
+
+
+
+#vehi_1=Vehicle_new[which(!is.na(Vehicle_new$Annual_Premium)),]
+#ggplot(Vehicle_new, aes(x=Annual_Premium)) +   geom_histogram(color="blue", #fill="blue")
+
+#new ggplot
+ggplot(Vehicle_new,aes(x=as.factor(Response), y= log(Annual_Premium))) +  geom_boxplot() +
+  ggtitle("Policyholders based on Annual_Premium per Response") +
+  labs(fill="Response")
+
+paste0("With the Log we are making it smoother, so it is better for visualization. The BoxPlot is useful because it can show that that the mean is not at the same level, so there is discrimination between profiles
+It is possible to infer that people with a greater Annual_Premium take the insurance.")
+```
+
+
+
+#Age
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+library(ezids)
+outlierKD2(df=vehicle,var=Age,rm=FALSE) 
+ggplot(vehicle, aes(x=as.factor(Response), y= Age)) + geom_boxplot() + ggtitle("Age: Box Plot")
+
+df_group <- group_by(vehicle,Response)
+summarise(df_group,Mean = median(Age)) #To analyze a Binary target with continuous variables
+
+vehicle %>% ggplot(aes(x=Age)) +geom_bar(stat = "count") + ggtitle("Count of Age")
+
+plot(density(vehicle$Age))
+
+a_vs_r <- table(vehicle$Response, vehicle$Age)
+
+vehicle %>% ggplot(aes(sample=Age)) + geom_qq() + geom_qq_line() + ggtitle("Age: QQPlot")
+
+
+barplot(a_vs_r,
+        main = "Response with Age",
+        xlab = "Age", ylab = "Frequency",
+        col = c("darkblue", "red"),
+        legend.text = rownames(a_vs_r),
+        beside = TRUE)
+
+
+paste0("Variable Age looks like right skewed and the count is maximum for age 25")
+
+
+paste0("The Age is important because there is a difference in the mean between accepting and rejecting, as it is possible to observe in the BoxPlot.
+Older people are who acquire insurance in comparison with those who do not.")
+
+```
+
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+library(tidyverse)
+vehicle %>% ggplot(aes(x=Gender)) +geom_bar(stat = "count") + ggtitle("Count of male and female")
+
+g_vs_r <- table(vehicle$Response, vehicle$Gender)
+
+barplot(g_vs_r,
+        main = "Response in Male and female category",
+        xlab = "Male/Female", ylab = "Frequency",
+        col = c("darkblue", "red"),
+        legend.text = rownames(g_vs_r),
+        beside = TRUE)
+
+prop.table(table(vehicle$Response,vehicle$Gender),1)*100   # horizontal add 100%
+
+prop.table(table(vehicle$Response,vehicle$Gender),2)*100   # vertical add 100%
+
+paste0("Male category is slightly greater than that of female and chances of buying the insurance is also little high")
+```
+
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+vehicle %>% ggplot(aes(x=Vehicle_Damage)) +geom_bar(stat = "count") + ggtitle("Count of Vehicle_Damage")
+
+vd_vs_r <- table(vehicle$Response, vehicle$Vehicle_Damage)
+
+barplot(vd_vs_r,
+        main = "Response with Vehicle Damage",
+        xlab = "Vehicle Damage", ylab = "Frequency",
+        col = c("darkblue", "red"),
+        legend.text = rownames(vd_vs_r),
+        beside = TRUE)
+
+prop.table(table(vehicle$Response,vehicle$Vehicle_Damage),2)*100  
+
+paste0("The distribution of customers with or without vehicle damage is almost same. The ones with vehicle damage are more interested in vehicle insurance.")
+```
+
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+vehicle %>% ggplot(aes(x=Region_Code, col=Region_Code)) +geom_bar(stat = "count") + ggtitle("Count of Region Code")
+
+plot(density(vehicle$Region_Code))
+
+rc_vs_r <- table(vehicle$Response, vehicle$Region_Code)
+
+barplot(rc_vs_r,
+        main = "Response with Region Code",
+        xlab = "Region_Code", ylab = "Frequency",
+        col = c("darkblue", "red"),
+        legend.text = rownames(rc_vs_r),
+        beside = TRUE)
+
+vehicle %>% ggplot(aes(sample=Region_Code)) + geom_qq() + geom_qq_line() + ggtitle("Region_Code: QQPlot")
+
+prop.table(table(vehicle$Response,vehicle$Region_Code),2)*100  
+
+paste0("Region Code 28 seems to have highest customers and also the highest customers interested in vehicle insurance")
+
+```
+
+
+
+```{r Trends in all variables}
+
+###########################################################################################################################
+
+vehicle %>% ggplot(aes(x=Driving_License)) +geom_bar(stat = "count") + ggtitle("Count of Driving_License")
+
+dl_vs_r <- table(vehicle$Response, vehicle$Driving_License)
+
+barplot(dl_vs_r,
+        main = "Response with Driving License",
+        xlab = "Driving License - Yes/No", ylab = "Frequency",
+        col = c("darkblue", "red"),
+        legend.text = rownames(dl_vs_r),
+        beside = TRUE)
+
+paste0("99% of customers have driving license and customers interested in Vehicle Insurance have driving license")
+
+###########################################################################################################################
+
+
+###########################################################################################################################
+
+vehicle %>% ggplot(aes(x=Previously_Insured)) +geom_bar(stat = "count") + ggtitle("Count of Previously_Insured")
+
+pi_vs_r <- table(vehicle$Response, vehicle$Previously_Insured)
+
+barplot(pi_vs_r,
+        main = "Response with Previously Insured",
+        xlab = "Previously Insured - Yes/No", ylab = "Frequency",
+        col = c("darkblue", "red"),
+        legend.text = rownames(pi_vs_r),
+        beside = TRUE)
+
+paste0("Customer who don't have an insurance are higher in number than those who have insurance. Also they are more likely to buy the insurance.")
+
+###########################################################################################################################
+
+vehicle %>% ggplot(aes(x=Vehicle_Age)) +geom_bar(stat = "count") + ggtitle("Count of Vehicle_Age")
+
+va_vs_r <- table(vehicle$Response, vehicle$Vehicle_Age)
+
+barplot(va_vs_r,
+        main = "Response with Vehicle Age",
+        xlab = "Vehicle Age", ylab = "Frequency",
+        col = c("darkblue", "red"),
+        legend.text = rownames(va_vs_r),
+        beside = TRUE)
+
+paste0("Customer who own a vehicle for more than 2 years are not many but some of them are interested in getting vehicle insurance. Mostly customers with vehicle for 1-2 years are interested in vehicle insurance.")
+
+#################################################################################
+```
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+###########################################################################################################################
+
+vehicle %>% ggplot(aes(x=Policy_Sales_Channel)) +geom_bar(stat = "count") + ggtitle("Count of Policy_Sales_Channel")
+
+ggplot(vehicle, aes(x=as.factor(Response), y= Policy_Sales_Channel)) + geom_boxplot()
+
+plot(density(vehicle$Policy_Sales_Channel))
+
+psc_vs_r <- table(vehicle$Response, vehicle$Policy_Sales_Channel)
+
+barplot(psc_vs_r,
+        main = "Response with Policy Sales Channel",
+        xlab = "Policy Sales Channel", ylab = "Frequency",
+        col = c("darkblue", "red"),
+        legend.text = rownames(psc_vs_r),
+        beside = TRUE)
+
+vehicle %>% ggplot(aes(sample=Policy_Sales_Channel)) + geom_qq() + geom_qq_line() + ggtitle("Policy_Sales_Channel: QQPlot")
+
+paste0("It is important to use the BoxPlot, because there is a lot of difference between the means.")
+
+```
+
+
+
+
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+library(tidyverse)
+vehicle %>% ggplot(aes(x=Annual_Premium)) +geom_bar(stat = "count") + ggtitle("Count of Annual_Premium")
+
+plot(density(vehicle$Annual_Premium))
+
+paste0("No clear trend emerges in Annual Premium. We check the data for outliers.")
+
+outlierKD2(vehicle, Annual_Premium, rm =T)
+
+plot(density(vehicle$Annual_Premium))
+
+newData=outlierKD2(df=vehicle,var=Annual_Premium,rm=TRUE)
+
+#new ggplot
+ggplot(newData,aes(y=Annual_Premium, x=Response)) +  geom_boxplot() +
+  ggtitle("Policyholders based on Annual_Premium per Response") +
+  labs(fill="Response")
+
+#newData %>% ggplot(aes(sample=Annual_Premium)) + geom_qq() + geom_qq_line() + #ggtitle("Annual_Premium: QQPlot")
+
+paste0("We can see from graph comparison above that there are a lot of outliers in for Annual Premium. We remove them and see what trend emerges.")
+```
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+library(tidyverse)
+vehicle %>% ggplot(aes(x=Vintage)) +geom_bar(stat = "count") + ggtitle("Count of Vintage")
+
+ggplot(vehicle, aes(x=as.factor(Response), y= Vintage)) + geom_boxplot() # to make it more easy to read
+
+plot(density(vehicle$Vintage))
+
+vt_vs_r <- table(vehicle$Response, vehicle$Vintage)
+
+barplot(vt_vs_r,
+        main = "Response with Vintage",
+        xlab = "Vintage", ylab = "Frequency",
+        col = c("darkblue", "red"),
+        legend.text = rownames(vt_vs_r),
+        beside = TRUE)
+
+#newData %>% ggplot(aes(sample=Vintage)) + geom_qq() + geom_qq_line() + ggtitle("Vintage: QQPlot")
+
+#df_group <- group_by(vehicle,Response)
+summarise(df_group,mean = median(Vintage))
+
+paste0("Looking at the boxplot, we can see that the means are almost at the same level; that is why the variable is nos helpful because it does not discriminate between accepting and reject")
+```
+
+
+
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+#remove the categorical variables in this stage , because we cannot plot the categorical values here
+
+# the numarical values
+
+#loadpkg("corrplot")
+vehicle.cor= cor(vehicle[,c(3,4,5,6,9,10,11,12)])
+xkabledply(vehicle.cor)
+corrplot(vehicle.cor, method = "number", type="upper", col=NULL)
+#
+```
+
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+# in this step we add all the varibles and also categorical as an integer to see how they impact the other variables
+
+#vehicle$Gender = factor(vehicle$Gender)
+vehicle$Gender <- ifelse(vehicle$Gender=='Male', 0, 1)
+#vehicle$Vehicle_Age = factor(vehicle$Vehicle_Age)
+#vehicle$Vehicle_Damage = factor(vehicle$Vehicle_Damage)
+
+vehicle$Vehicle_Damage <- ifelse(vehicle$Vehicle_Damage=='No', 0, 1)
+vehicle$Vehicle_Age <- ifelse(vehicle$Vehicle_Age=='> 2 Years',2
+                            ,ifelse(vehicle$Vehicle_Age=='1-2 Year',1,0))
+
+par("mar")
+par(mar=c(1,1,1,1))
+#pairs(subset(train, Driving_License==1))
+
+vehicle.cor= cor (vehicle[c(2,3,5,7,8,9,10,11,12)])
+#train.cor= cor (train[c(2,3,4,5,6,7,8,9,10,11,12)])
+vehicle_n <- subset(vehicle,Driving_License==0)
+pairs(vehicle_n)
+corrplot(vehicle.cor, method = "number", type="upper", col=NULL)
+#vehicle$Gender = factor(vehicle$Gender)
+#vehicle$Region_Code = factor(vehicle$Region_Code)
+#vehicle$Previously_Insured= factor(vehicle$Previously_Insured)
+#vehicle$Vehicle_Age=factor(vehicle$Vehicle_Age)
+#vehicle$Vehicle_Damage=factor(vehicle$Vehicle_Damage)
+#vehicle$Policy_Sales_Channel=factor(vehicle$Policy_Sales_Channel)
+#vehicle$Vehicle_Damage=factor(vehicle$Vehicle_Damage)
+#vehicle$Response=factor(vehicle$Response)
+
+
+#loadPkg("lattice")
+
+#pairs(vehicle[1:12])
+
+```
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+#we assign some integer values which are factor as factors to see the cor between the rest
+# we using factor data 
+vehicle$Gender=factor(vehicle$Gender)
+vehicle$Driving_License=factor(vehicle$Driving_License)
+vehicle$Previously_Insured=factor(vehicle$Previously_Insured)
+vehicle$Vehicle_Age=factor(vehicle$Vehicle_Age)
+vehicle$Vehicle_Damage=factor(vehicle$Vehicle_Damage)
+
+
+vehicle.cor= cor (vehicle[c(3,5,9,10,11,12)])
+new_data <- subset(vehicle,Driving_License==0)
+corrplot(vehicle.cor, method = "number", type="upper", col=NULL)
+
+
+```
+
+
+
+
+
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+veh <- vehicle
+
+veh$Gender <- factor(vehicle$Gender)
+veh$Driving_License <- factor(vehicle$Driving_License)
+veh$Previously_Insured <- factor(vehicle$Previously_Insured)
+veh$Vehicle_Damage <- factor(vehicle$Vehicle_Damage)
+veh$Response <- factor(vehicle$Response)
+
+veh$Vehicle_Age <- ifelse(vehicle$Vehicle_Age == '> 2 Years', 2,ifelse(vehicle$Vehicle_Age == '1-2 Year', 1, 0))
+
+veh$Vehicle_Age <- factor(veh$Vehicle_Age)
+```
+
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+ct <- table(veh$Gender,veh$Response)
+
+xkabledply(ct, title="Contingency table for Gender vs Response")
+
+paste0("Alpha value is set as 0.05 and p -value from Pearson's test is: ", chisq.test(ct)$p.value)
+
+paste0(ifelse(chisq.test(ct)$p.value< 0.05, "Gender is not independent of response","Gender is independent of response"))
+
+```
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+ct <- table(veh$Driving_License,veh$Response)
+
+xkabledply(ct, title="Contingency table for Driving License vs Response")
+
+paste0("Alpha value is set as 0.05 and p -value from Pearson's test is: ", chisq.test(ct)$p.value)
+
+paste0(ifelse(chisq.test(ct)$p.value< 0.05, "Driving License is not independent of response","Driving License is independent of response"))
+```
+
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+ct <- table(veh$Previously_Insured,veh$Response)
+
+xkabledply(ct, title="Contingency table for Previously Insured vs Response")
+
+paste0("Alpha value is set as 0.05 and p -value from Pearson's test is: ", chisq.test(ct)$p.value)
+
+paste0(ifelse(chisq.test(ct)$p.value< 0.05, "Previously Insured is not independent of response","Previously Insured is independent of response"))
+```
+
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+ct <- table(veh$Vehicle_Age,veh$Response)
+
+xkabledply(ct, title="Contingency table for Vehicle Age vs Response")
+
+paste0("Alpha value is set as 0.05 and p -value from Pearson's test is: ", chisq.test(ct)$p.value)
+
+paste0(ifelse(chisq.test(ct)$p.value< 0.05, "Vehicle Age is not independent of response","Vehicle Age is independent of response"))
+
+```
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+ct <- table(veh$Vehicle_Damage,veh$Response)
+
+xkabledply(ct, title="Contingency table for Vehicle Damage vs Response")
+
+paste0("Alpha value is set as 0.05 and p -value from Pearson's test is: ", chisq.test(ct)$p.value)
+
+paste0(ifelse(chisq.test(ct)$p.value< 0.05, "Vehicle Damage is not independent of response","Vehicle Damage is independent of response"))
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
