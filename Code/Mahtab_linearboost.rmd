@@ -1,0 +1,132 @@
+---
+title: "MahtabB-linearboost"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+---
+  title: "Intro to DS - Linear Model part I"
+author: ""
+date: "today"
+# date: "`r Sys.Date()`"
+output:
+  html_document:
+  code_folding: hide
+number_sections: false
+toc: yes
+toc_depth: 3
+toc_float: yes
+pdf_document:
+  toc: yes
+toc_depth: '3'
+---
+  
+```{r init, include=FALSE}
+# some of common options (and the defaults) are: 
+# include=T, eval=T, echo=T, results='hide'/'asis'/'markup',..., collapse=F, warning=T, message=T, error=T, cache=T, fig.width=6, fig.height=4, fig.dim=c(6,4) #inches, fig.align='left'/'center','right', 
+library(ezids)
+# knitr::opts_chunk$set(warning = F, results = "markup", message = F)
+knitr::opts_chunk$set(warning = F, results = "hide", message = F)
+options(scientific=T, digits = 3) 
+# options(scipen=9, digits = 3) 
+# ‘scipen’: integer. A penalty to be applied when deciding to print numeric values in fixed or exponential notation.  Positive values bias towards fixed and negative towards scientific notation: fixed notation will be preferred unless it is more than ‘scipen’ digits wider.
+# use scipen=999 to prevent scientific notation at all times
+```
+
+
+
+```{r}
+#remove the categorical variables in this stage , because we cannot plot the categorical values here
+install.packages("corrplot")
+
+library(corrplot)
+
+library(ezids)
+# the numarical values
+
+
+#loadpkg("corrplot")
+train <- data.frame(read.csv("train.csv", header = TRUE))
+train <- read.csv('train.csv')
+str(train)
+train.cor= cor(train[,c(3,4,5,6,9,10,11,12)])
+xkabledply(train.cor)
+corrplot(train.cor, method = "number", type="upper", col=NULL)
+#
+```
+```{r}
+unique((train$Vehicle_Age))
+```
+# the categorical values
+```{r}
+# in this step we add all the varibles and also categorical as an integer to see how they impact the other variables
+
+#train$Gender = factor(train$Gender)
+train$Gender <- ifelse(train$Gender=='Male', 0, 1)
+#train$Vehicle_Age = factor(train$Vehicle_Age)
+#train$Vehicle_Damage = factor(train$Vehicle_Damage)
+train$Vehicle_Damage <- ifelse(train$Vehicle_Damage=='No', 0, 1)
+train$Vehicle_Age <- ifelse(train$Vehicle_Age=='> 2 Years',2
+                            ,ifelse(train$Vehicle_Age=='1-2 Year',1,0))
+
+par("mar")
+par(mar=c(1,1,1,1))
+#pairs(subset(train, Driving_License==1))
+pairs(new_data)
+train.cor= cor (train[c(2,3,4,5,6,7,8,9,10,11,12)])
+new_data <- subset(train,Driving_License==0)
+corrplot(train.cor, method = "number", type="upper", col=NULL)
+#train$Gender = factor(train$Gender)
+#train$Region_Code = factor(train$Region_Code)
+#train$Previously_Insured= factor(train$Previously_Insured)
+#train$Vehicle_Age=factor(train$Vehicle_Age)
+#train$Vehicle_Damage=factor(train$Vehicle_Damage)
+#train$Policy_Sales_Channel=factor(train$Policy_Sales_Channel)
+#train$Vehicle_Damage=factor(train$Vehicle_Damage)
+#train$Response=factor(train$Response)
+
+
+#loadPkg("lattice")
+
+#pairs(train[1:12])
+
+```
+```{r}
+#we assign some integer values which are factor as factors to see the cor between all the variables
+train$Gender=factor(train$Gender)
+train$Driving_License=factor(train$Driving_License)
+train$Previously_Insured=factor(train$Previously_Insured)
+train$Vehicle_Age=factor(train$Vehicle_Age)
+train$Vehicle_Damage=factor(train$Vehicle_Damage)
+
+
+train.cor= cor (train[c(3,5,9,10,11,12)])
+new_data <- subset(train,Driving_License==0)
+corrplot(train.cor, method = "number", type="upper", col=NULL)
+
+
+```
