@@ -291,11 +291,20 @@ plot(density(vehicle$Annual_Premium))
 newData=outlierKD2(df=vehicle,var=Annual_Premium,rm=TRUE)
 
 #new ggplot
-ggplot(newData,aes(y=Annual_Premium, x=Response)) +  geom_boxplot() +
+ggplot(newData,aes(x=as.factor(Response), y= Annual_Premium)) +  geom_boxplot() +
   ggtitle("Policyholders based on Annual_Premium per Response") +
   labs(fill="Response")
 
-#newData %>% ggplot(aes(sample=Annual_Premium)) + geom_qq() + geom_qq_line() + #ggtitle("Annual_Premium: QQPlot")
+ap_vs_r <- table(vehicle$Response, vehicle$Annual_Premium)
+
+barplot(ap_vs_r,
+        main = "Response with Vintage",
+        xlab = "Vintage", ylab = "Frequency",
+        col = c("darkblue", "red"),
+        legend.text = rownames(ap_vs_r),
+        beside = TRUE)
+
+newData %>% ggplot(aes(sample=Annual_Premium)) + geom_qq() + geom_qq_line() + ggtitle("Annual_Premium: QQPlot")
 
 paste0("We can see from graph comparison above that there are a lot of outliers in for Annual Premium. We remove them and see what trend emerges.")
 
@@ -309,7 +318,9 @@ paste0("We can see from graph comparison above that there are a lot of outliers 
 
 vehicle %>% ggplot(aes(x=Vintage)) +geom_bar(stat = "count") + ggtitle("Count of Vintage")
 
-ggplot(vehicle, aes(x=as.factor(Response), y= Vintage)) + geom_boxplot() # to make it more easy to read
+ggplot(vehicle, aes(x=as.factor(Response), y= Vintage)) + geom_boxplot() +
+  ggtitle("Policyholders based on Vintage per Response") +
+  labs(fill="Response")
 
 plot(density(vehicle$Vintage))
 
@@ -366,10 +377,10 @@ vehicle$Vehicle_Damage <- factor(vehicle$Vehicle_Damage)
 
 vehicle$Vehicle_Age <- factor(vehicle$Vehicle_Age)
 
-vehicle$Region_Code <-ifelse(vehicle$Region_Code %in% c(9,23,25,33,44,50,34,36,42), "RegionI", 
-                             ifelse(vehicle$Region_Code %in% c(18,17,26,39,55,19,20,27,29,31,38,46), "RegionII",
-                                    ifelse(vehicle$Region_Code %in% c(10,11,12,13,24,37,45,51,54,1,21,28,47,5,22,40,48),"RegionIII",
-                                           ifelse(vehicle$Region_Code %in% c(4,8,16,35,30,49,32,56,2,6,15,41,53),"RegionIV","RegionV"))))
+vehicle$Region_Code <-ifelse(vehicle$Region_Code %in% c(9,23,25,33,44,50,34,36,42), "Northeast", 
+                             ifelse(vehicle$Region_Code %in% c(18,17,26,39,55,19,20,27,29,31,38,46), "Midwest",
+                                    ifelse(vehicle$Region_Code %in% c(10,11,12,13,24,37,45,51,54,1,21,28,47,5,22,40,48),"South",
+                                           ifelse(vehicle$Region_Code %in% c(4,8,16,35,30,49,32,56,2,6,15,41,53),"West","Hogwarts"))))
 
 vehicle$Region_Code <- factor(vehicle$Region_Code)
 
