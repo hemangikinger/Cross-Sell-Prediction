@@ -102,9 +102,6 @@ plot(density(vehicle$Age))
 
 a_vs_r <- table(vehicle$Response, vehicle$Age)
 
-vehicle %>% ggplot(aes(sample=Age)) + geom_qq() + geom_qq_line() + ggtitle("Age: QQPlot")
-
-
 barplot(a_vs_r,
         main = "Response with Age",
         xlab = "Age", ylab = "Frequency",
@@ -163,8 +160,6 @@ paste0("The distribution of customers with or without vehicle damage is almost s
 ## Region Code v/s Response
 ```{r , echo=FALSE, message=FALSE, warning=FALSE}
 vehicle %>% ggplot(aes(x=Region_Code, col=Region_Code)) +geom_bar(stat = "count") + ggtitle("Count of Region Code")
-
-plot(density(vehicle$Region_Code))
 
 rc_vs_r <- table(vehicle$Response, vehicle$Region_Code)
 
@@ -280,8 +275,6 @@ paste0("It is important to use the BoxPlot, because there is a lot of difference
 
 vehicle %>% ggplot(aes(x=Annual_Premium)) +geom_bar(stat = "count") + ggtitle("Count of Annual_Premium")
 
-plot(density(vehicle$Annual_Premium))
-
 paste0("No clear trend emerges in Annual Premium. We check the data for outliers.")
 
 outlierKD2(vehicle, Annual_Premium, rm =T)
@@ -322,8 +315,6 @@ ggplot(vehicle, aes(x=as.factor(Response), y= Vintage)) + geom_boxplot() +
   ggtitle("Policyholders based on Vintage per Response") +
   labs(fill="Response")
 
-plot(density(vehicle$Vintage))
-
 vt_vs_r <- table(vehicle$Response, vehicle$Vintage)
 
 barplot(vt_vs_r,
@@ -333,10 +324,10 @@ barplot(vt_vs_r,
         legend.text = rownames(vt_vs_r),
         beside = TRUE)
 
-#newData %>% ggplot(aes(sample=Vintage)) + geom_qq() + geom_qq_line() + ggtitle("Vintage: QQPlot")
-
-df_group <- group_by(vehicle,Response)
-summarise(df_group,mean = median(Vintage))
+# #newData %>% ggplot(aes(sample=Vintage)) + geom_qq() + geom_qq_line() + ggtitle("Vintage: QQPlot")
+# 
+# df_group <- group_by(vehicle,Response)
+# summarise(df_group,mean = median(Vintage))
 
 paste0("Looking at the boxplot, we can see that the means are almost at the same level; that is why the variable is nos helpful because it does not discriminate between accepting and reject")
 
@@ -344,7 +335,7 @@ paste0("Looking at the boxplot, we can see that the means are almost at the same
 
 ```
 
-## INFERENTIAL STATISTICS
+## INFERENTIAL STATISTICS - HYPOTHESIS TESTING
 
 ## Converting character variables into numerical for correlation
 ```{r , echo=FALSE, message=FALSE, warning=FALSE}
@@ -360,6 +351,7 @@ vehicle$Vehicle_Age <- ifelse(vehicle$Vehicle_Age == '> 2 Years', 2,ifelse(vehic
 #vehicle.cor= cor(vehicle[,c(3,4,5,6,9,10,11,12)])
 vehicle.cor= cor(vehicle)
 xkabledply(vehicle.cor)
+
 corrplot(vehicle.cor, method = "number", type="upper", col=NULL, title="Vehicle Correlation (without Factors", use="pairwise.complete.obs")
 #
 ```
