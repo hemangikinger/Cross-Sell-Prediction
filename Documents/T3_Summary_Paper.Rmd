@@ -47,16 +47,36 @@ An insurance policy is an arrangement by which a company undertakes to provide a
 2. What is Vehicle Insurance?
 Vehicle insurance is insurance for cars, trucks, motorcycles, and other road vehicles where every year customer needs to pay a premium of certain amount to insurance provider so that they provide financial protection against physical damage or bodily injury resulting from traffic collisions and against liability that could also arise from incidents in a vehicle.
 
-3. SMART Problem?
+# SMART Problem
+
 Whether a customer would be interested in an additional insurance service like vehicle Insurance is extremely helpful for the company because it can then accordingly plan its communication strategy to reach out to those customers and optimize its business model and revenue. We have following information to assist our analysis: demographics (gender, age, region code type), Vehicles (Vehicle Age, Damage), Policy (Premium, sourcing channel) etc.
+
+### Why did we choose this topic?
+
+Insurance was a familiar field to our team and cross-selling is a widely used strategy in insurance market. Hence, we decided to pursue cross-sell analytics. 
+
+### What prior research and analysis have been done on this topic?
+
+We were trying to find some effective ways to understand the cross selling in detail and we came across following links:
+
+https://www.yieldify.com/blog/cross-selling/
+https://www.podium.com/article/cross-selling/
+https://www.business.com/articles/how-to-boost-sales-with-cross-selling-and-cross-promotion/
+
+### Your SMART questions, and how did they come up?
+
+After studying the data set, we realized which attributes contribute to the response of the customer. Following that we formulated our SMART question and sub-SMART questions around response. 
+
+###	After the EDA, did your questions change? If so, how?
+
+Our SMART questions didn't change but we modified them a little to better project the impact of independent attributes on the "Response" of customer.
 
 This report is organized as follows:
 
 1. Description of the Data (explanation of the dataset and its variables)
-2. Target Variable EDA
-3. Independent Variables EDA
-4. Hypothesis Testing: t-Test & Chi-Square
-5. Conclusion
+2. EDA - Target variable and Independent variable
+3. Hypothesis Testing: t-Test & Chi-Square
+4. Conclusion
 
 
 # Cross-Sell RAW Data - Description
@@ -370,27 +390,10 @@ boxplot(log(vehicle$Annual_Premium), xlab="Annual_Premium without Outliers")
 
 With the Log we are making it smoother, so it is better for visualization. The BoxPlot is useful because it can show that that the mean is not at the same level, so there is discrimination between profiles. It is possible to infer that people with a greater Annual_Premium take the insurance.
 
-## Converting character variables into numerical for correlation
-```{r , echo=FALSE, message=FALSE, warning=FALSE}
-
-# Assign integer values to character variables
-
-vehicle$Gender <- ifelse(vehicle$Vehicle_Damage == 'Male', 0,1)
-
-vehicle$Vehicle_Damage <- ifelse(vehicle$Vehicle_Damage == 'Yes', 1,0)
-
-vehicle$Vehicle_Age <- ifelse(vehicle$Vehicle_Age == '> 2 Years', 2,ifelse(vehicle$Vehicle_Age == '1-2 Year', 1, 0))
-
-#vehicle.cor= cor(vehicle[,c(3,4,5,6,9,10,11,12)])
-vehicle.cor= cor(vehicle)
-xkabledply(vehicle.cor)
-
-corrplot(vehicle.cor, method = "number", type="upper", col=NULL, title="Vehicle Correlation (without Factors", use="pairwise.complete.obs")
-
-```
-
 ## Converting categorical variables into factors
 ```{r message=FALSE, warning=FALSE, , echo=FALSE}
+
+veh <- vehicle
 
 vehicle$Gender <- factor(vehicle$Gender)
 vehicle$Driving_License <- factor(vehicle$Driving_License)
@@ -475,6 +478,8 @@ From t-test we can conclude that p-value of all numerical variables for accepted
 
 ## χ² test for categorical variables
 
+We use Chi-square (χ²) test for the categorical variables - Gender, driving License, Region Code, Previously Insured, Vehicle Age, Vehicle damage and Response to establish dependency. We have used "Test of Independence".  If the p-value is less than 0.05, which is our alpha, we can conclude that our variables are not independent, we fail to reject the null hypothesis and it is statistically significant for our model.
+
 ### χ² test for Gender
 
 ```{r , echo=FALSE, message=FALSE, warning=FALSE, results='TRUE'}
@@ -556,7 +561,28 @@ paste0(ifelse(chisq.test(ct)$p.value< 0.05, "Vehicle Damage is not independent o
 
 ```
 
+# Conclusion
 
+## Establishing correlation
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+# Assign integer values to character variables
+
+veh$Gender <- ifelse(veh$Vehicle_Damage == 'Male', 0,1)
+
+veh$Vehicle_Damage <- ifelse(veh$Vehicle_Damage == 'Yes', 1,0)
+
+veh$Vehicle_Age <- ifelse(veh$Vehicle_Age == '> 2 Years', 2,ifelse(veh$Vehicle_Age == '1-2 Year', 1, 0))
+
+#vehicle.cor= cor(vehicle[,c(3,4,5,6,9,10,11,12)])
+veh.cor= cor(veh)
+xkabledply(veh.cor)
+
+corrplot(veh.cor, method = "number", type="upper", col=NULL, title="Vehicle Correlation (without Factors", use="pairwise.complete.obs")
+
+```
+
+After looking at our hypothesis tests, we can conclude that - "NULL Hypothesis can be rejected". This means that numerical attributes have a statistically significant w.r.t our dependent variable - Response - and needs to be analysed further. After the tests, we did correlation, to understand which variables are "more" significant in impacting "Response" and we can conclude that vehicle_damage, previously_insured and vehicle_age have high correlation. 
 
 
 
