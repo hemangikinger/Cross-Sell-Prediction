@@ -1,0 +1,599 @@
+---
+title: "T3 - Summary Paper - CROSS SELL Analytics"
+author: "T3 - Linear Boost"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    code_folding: hide
+    number_sections: true
+    toc: yes
+    toc_float: yes
+    css: bootstrap.css
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+---
+
+```{r init, include=F}
+# The package "ezids" (EZ Intro to Data Science) includes a lot of the helper functions we developed for the course. 
+# Some of the frequently used functions are loadPkg(), xkabledply(), xkablesummary(), uzscale(), etc.
+# Once installed, load the library.
+library(ezids)
+library(tidyverse)
+library(corrplot)
+library("ggplot2")
+library(dplyr) 
+
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = F, results = "hide", message = F)
+options(scientific=T, digits = 3) 
+```
+
+# Introduction
+
+What is Cross-Sell?
+
+Cross-selling in insurance is the act of promoting products that are related or complementary to the one(s) your current customers already own or use. It is one of the most effective methods of marketing.
+
+Client Profile:
+
+An insurance company that provides medical insurance to its customers wants to know how many of their existing policyholders (customers) from last year will also be interested in Vehicle Insurance provided by the company.
+
+1.  What is an Insurance Policy? An insurance policy is an arrangement by which a company undertakes to provide a guarantee of compensation for specified loss, damage, illness, or death in return for the payment of a specified premium. A premium is a sum of money that the customer needs to pay regularly to an insurance company for this guarantee.
+
+2.  What is Vehicle Insurance? Vehicle insurance is insurance for cars, trucks, motorcycles, and other road vehicles where every year customer needs to pay a premium of certain amount to insurance provider so that they provide financial protection against physical damage or bodily injury resulting from traffic collisions and against liability that could also arise from incidents in a vehicle.
+
+# SMART Problem
+
+Whether a customer would be interested in an additional insurance service like vehicle Insurance is extremely helpful for the company because it can then accordingly plan its communication strategy to reach out to those customers and optimize its business model and revenue. We have following information to assist our analysis: demographics (gender, age, region code type), Vehicles (Vehicle Age, Damage), Policy (Premium, sourcing channel) etc.
+
+### Why did we choose this topic?
+
+Insurance was a familiar field to our team and cross-selling is a widely used strategy in insurance market. Hence, we decided to pursue cross-sell analytics.
+
+### What prior research and analysis have been done on this topic?
+
+We were trying to find some effective ways to understand the cross selling in detail and we came across following links:
+
+<https://www.yieldify.com/blog/cross-selling/> <https://www.podium.com/article/cross-selling/> <https://www.business.com/articles/how-to-boost-sales-with-cross-selling-and-cross-promotion/>
+
+### Your SMART questions, and how did they come up?
+
+After studying the data set, we realized which attributes contribute to the response of the customer. Following that we formulated our SMART question and sub-SMART questions around response.
+
+### After the EDA, did your questions change? If so, how?
+
+Our SMART questions didn't change but we modified them a little to better project the impact of independent attributes on the "Response" of customer.
+
+This report is organized as follows:
+
+1.  Description of the Data (explanation of the dataset and its variables)
+2.  EDA - Target variable and Independent variable
+3.  Hypothesis Testing: t-Test & Chi-Square
+4.  Conclusion
+
+# Cross-Sell RAW Data - Description
+
+As mentioned previously, our dataset houses 381109 observations across 12 variables. (See below for a readout of the dataset's structure and variable names.) Variable descriptions are as follows and come from the following link; astericks next to variable name indicates usage in our analysis
+
+```{r cross-sell RAW Data, echo=FALSE, warning=FALSE}
+
+vehicle<-read.csv("train.csv")
+
+str(vehicle)
+
+```
+
+![dataset](DataAnalysis_dataset.png)
+
+For our exploratory data analysis, we ignored "id" because this is a independent variable with no relation to customers "Response".
+
+# Exploratory Data Analysis
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+xkabledply(summary(vehicle))
+
+```
+
+We will be able to get a idea on the outlier here by the percentiles ( In the Annual_Premium the 3rd quartile is 39400 and the max is 540165 this represents the outlier in this column.
+
+## Response Variable Trend
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(vehicle,aes(x=ifelse(Response==1,"Accept","Reject"))) +geom_bar(stat = "count") + labs(x="Response",y="Count") + ggtitle("Response Variable Count")
+
+table(vehicle$Response)/dim(vehicle)[1]
+
+```
+
+From the plot we can say that there's imbalance in response. The individuals interested in purchasing a vehicle insurance are only 12.6%.
+
+## TREND OF ALL FEATURES IN DATASET WITH RESPONSE
+
+### Age v/s Response
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(vehicle, aes(x=ifelse(Response==1,"Accept","Reject"), y= Age)) + geom_boxplot() + 
+labs(x="Response",y="Age")+
+ggtitle("Age: Box Plot")
+
+vehicle %>% ggplot(aes(x=Age)) +geom_bar(stat = "count") + ggtitle("Count of Age")
+
+```
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+plot(density(vehicle$Age))
+
+a_vs_r <- table(vehicle$Response, vehicle$Age)
+
+
+barplot(a_vs_r,
+        main = "Response with Age",
+        xlab = "Age", 
+        ylab = "Frequency",
+        col = c("dodgerblue", "tomato"),
+        legend.text = c("Reject", "Accept"),
+        beside = TRUE)
+
+vehicle %>% ggplot(aes(sample=log(Age))) + 
+  geom_qq() + geom_qq_line() + 
+  ggtitle("AGE: QQPlot") +
+  xlab("Normal theoretical quantiles") +
+ylab("Exponential data quantiles")
+
+
+```
+
+Variable Age looks like right skewed and the count is maximum for age 25. The Age is important because there is a difference in the medians between accepting and rejecting, as it is possible to observe in the Box-Plot. Older people are who acquire insurance in comparison with those who do not.
+
+### Gender v/s Response
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+vehicle %>% ggplot(aes(x=Gender)) +geom_bar(stat = "count") + ggtitle("Count of Male and Female")
+
+g_vs_r <- table(vehicle$Response, vehicle$Gender)
+
+barplot(g_vs_r,
+        main = "Response in Male and female category",
+        xlab = "Male/Female", ylab = "Frequency",
+        col = c("darkblue", "red"),
+        legend.text = c("Reject", "Accept"),
+        beside = TRUE)
+
+prop.table(table(vehicle$Response,vehicle$Gender),1)*100   # horizontal add 100%
+
+prop.table(table(vehicle$Response,vehicle$Gender),2)*100   # vertical add 100%
+
+```
+
+Male category is slightly greater than that of female and chances of buying the insurance is also little high
+
+### Vehicle Damage v/s Response
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+vehicle %>% ggplot(aes(x=Vehicle_Damage)) +geom_bar(stat = "count") + ggtitle("Count of Vehicle_Damage")
+
+vd_vs_r <- table(vehicle$Response, vehicle$Vehicle_Damage)
+
+barplot(vd_vs_r,
+        main = "Response with Vehicle Damage",
+        xlab = "Vehicle Damage", 
+        ylab = "Frequency",
+        col = c("darkblue", "red"),
+        legend.text = c("Reject", "Accept"),
+        beside = TRUE)
+
+prop.table(table(vehicle$Response,vehicle$Vehicle_Damage),2)*100  
+
+```
+
+The distribution of customers with or without vehicle damage is almost same. The ones with vehicle damage are more interested in vehicle insurance.
+
+### Region Code v/s Response
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+vehicle %>% ggplot(aes(x=Region_Code, col=Region_Code)) +geom_bar(stat = "count") + ggtitle("Count of Region Code")
+
+rc_vs_r <- table(vehicle$Response, vehicle$Region_Code)
+
+barplot(rc_vs_r,
+        main = "Response with Region Code",
+        xlab = "Region_Code", 
+        ylab = "Frequency",
+        col = c("dodgerblue", "tomato"),
+        legend.text = c("Reject", "Accept"),
+        beside = TRUE)
+
+
+
+vehicle %>% ggplot(aes(sample=Region_Code)) + 
+  geom_qq() + geom_qq_line() + 
+  ggtitle("Region_Code: QQPlot")+
+  xlab("Normal theoretical quantiles") +
+ylab("Exponential data quantiles")
+
+#prop.table(table(vehicle$Response,vehicle$Region_Code),2)*100  
+
+```
+
+Region Code 28 seems to have highest customers and also the highest customers interested in vehicle insurance.
+
+### Driving License v/s Response
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(vehicle,aes(x=ifelse(Driving_License==1,"Yes","No"))) +geom_bar(stat = "count") + labs(x="Driving_License",y="Count") + ggtitle("Count of Driving_License")
+
+dl_vs_r <- table(vehicle$Response, vehicle$Driving_License)
+
+barplot(dl_vs_r,
+        main = "Response with Driving License",
+        xlab = "Driving License",
+        ylab = "Frequency",
+        col = c("darkblue", "red"),
+        names.arg = c("No", "Yes"),
+        legend.text = c("Reject", "Accept"),
+        beside = TRUE)
+```
+
+99% of customers have driving license and customers interested in Vehicle Insurance have driving license
+
+### Previously Insured v/s Response
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(vehicle,aes(x=ifelse(Previously_Insured==1,"Yes","No"))) +geom_bar(stat = "count") + labs(x="Previously_Insured",y="Count") + ggtitle("Count of Driving_License")
+
+pi_vs_r <- table(vehicle$Response, vehicle$Previously_Insured)
+
+barplot(pi_vs_r,
+        main = "Response with Previously Insured",
+        xlab = "Previously Insured", 
+        ylab = "Frequency",
+        col = c("darkblue", "red"),
+        names.arg = c("No", "Yes"),
+        legend.text = c("Reject", "Accept"),
+        beside = TRUE)
+```
+
+Customer who don't have an insurance are higher in number than those who have insurance. Also they are more likely to buy the insurance.
+
+### Vehicle Age v/s Response
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+vehicle %>% ggplot(aes(x=Vehicle_Age)) +geom_bar(stat = "count") + ggtitle("Count of Vehicle_Age")
+
+va_vs_r <- table(vehicle$Response, vehicle$Vehicle_Age)
+
+barplot(va_vs_r,
+        main = "Response with Vehicle Age",
+        xlab = "Vehicle Age", 
+        ylab = "Frequency",
+        col = c("darkblue", "red"),
+        legend.text = c("Reject", "Accept"),
+        beside = TRUE)
+```
+
+Customer who own a vehicle for more than 2 years are not many but some of them are interested in getting vehicle insurance. Mostly customers with vehicle for 1-2 years are interested in vehicle insurance.
+
+### Policy Sales Channel v/s Response
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+vehicle %>% ggplot(aes(x=Policy_Sales_Channel)) +geom_bar(stat = "count") + ggtitle("Count of Policy_Sales_Channel")
+
+ggplot(vehicle, aes(x=ifelse(Response==1,"Accept","Reject"), y= Policy_Sales_Channel)) + 
+  geom_boxplot() +
+  labs(x="Response",y="Policy_Sales_Channel")+
+  ggtitle("Policy_Sales_Channel: Box Plot")
+
+plot(density(vehicle$Policy_Sales_Channel))
+
+psc_vs_r <- table(vehicle$Response, vehicle$Policy_Sales_Channel)
+
+barplot(psc_vs_r,
+        main = "Response with Policy Sales Channel",
+        xlab = "Policy Sales Channel", 
+        ylab = "Frequency",
+        col = c("darkblue", "red"),
+        legend.text = c("Reject", "Accept"),
+        beside = TRUE)
+
+vehicle %>% ggplot(aes(sample=Policy_Sales_Channel)) + 
+  geom_qq() + 
+  geom_qq_line() + 
+  ggtitle("Policy_Sales_Channel: QQPlot")+
+  xlab("Normal theoretical quantiles") +
+ylab("Exponential data quantiles")
+
+paste0("It is important to use the BoxPlot, because there is a lot of difference between the medians. This is not a normally distributed variable")
+
+```
+
+### Annual Premium v/s Response
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(vehicle,aes(x=Annual_Premium)) +geom_histogram(bins=30) + ggtitle("Count of Annual_Premium")
+
+paste0("No clear trend emerges in Annual Premium. We check the data for outliers.")
+
+outlierKD2(vehicle, Annual_Premium, rm =T)
+
+plot(density(vehicle$Annual_Premium))
+
+newData=outlierKD2(df=vehicle,var=Annual_Premium,rm=TRUE)
+
+#new ggplot
+ggplot(newData,aes(x=ifelse(Response==1,"Accept","Reject"), y= Annual_Premium)) +  geom_boxplot() +
+  ggtitle("Annual_Premium per Response") +
+  labs(x="Response",y="Annual_Premium")
+
+ap_vs_r <- table(vehicle$Response, vehicle$Annual_Premium)
+
+```
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(vehicle, aes(x = Annual_Premium)) +  
+  geom_histogram(bins=30) + 
+  facet_grid(~ifelse(Response==1,"Accept","Reject"))+
+      ggtitle("Annual_Premium distribution per Response") 
+
+newData %>% ggplot(aes(sample=Annual_Premium)) + 
+  geom_qq() + geom_qq_line() + 
+  ggtitle("Annual_Premium: QQPlot")+
+    xlab("Normal theoretical quantiles") +
+ylab("Exponential data quantiles")
+
+```
+
+We can see from graph comparison above that there are a lot of outliers in for Annual Premium. We remove them and see what trend emerges. Also this is not a normally distributed variable.
+
+As observed in the boxplot, the medians are slightly different, so this variable will be necessary for the model.
+
+### Vintage v/s Response
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(vehicle, aes(x=Vintage)) +   
+  geom_histogram(color="dodgerblue", fill="dodgerblue")+
+    ggtitle("Vintage Distribution")
+
+ggplot(vehicle, aes(x=ifelse(Response==1,"Accept","Reject"), 
+                    y= as.numeric(Vintage))) + geom_boxplot() +
+  ggtitle("Policyholders based on Vintage per Response") +
+ labs(x="Response",y="Vintage")
+
+vt_vs_r <- table(vehicle$Response, vehicle$Vintage)
+
+ggplot(vehicle, aes(x = Vintage)) +  
+  geom_histogram(bins=30) + 
+  facet_grid(~ifelse(Response==1,"Accept","Reject"))+
+    ggtitle("Vintage Distribution per Response")  
+
+```
+
+Looking at the box-plot, we can see that the medians are almost at the same level; that is why the variable is nos helpful because it does not discriminate between accepting and reject
+
+# INFERENTIAL STATISTICS - HYPOTHESIS TESTING
+
+## Removing Outliers
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+boxplot(log(vehicle$Annual_Premium), xlab="Annual_Premium with Outliers")
+
+vehicle.Outliers=vehicle[which(!is.na(vehicle$Annual_Premium)),]
+ggplot(vehicle.Outliers, aes(x=Annual_Premium)) +   geom_histogram(color="blue", fill="blue")
+
+# Removing Outliers from Annual Premium
+
+vehicle=subset(outlierKD2(df=vehicle.Outliers,var=Annual_Premium,rm=TRUE), is.na(Annual_Premium)==FALSE)
+
+boxplot(log(vehicle$Annual_Premium), xlab="Annual_Premium without Outliers")
+
+```
+
+With the Log we are making it smoother, so it is better for visualization. The BoxPlot is useful because it can show that that the mean is not at the same level, so there is discrimination between profiles. It is possible to infer that people with a greater Annual_Premium take the insurance.
+
+## Converting categorical variables into factors
+
+```{r message=FALSE, warning=FALSE, , echo=FALSE}
+
+veh <- vehicle
+
+vehicle$Gender <- factor(vehicle$Gender)
+vehicle$Driving_License <- factor(vehicle$Driving_License)
+vehicle$Previously_Insured <- factor(vehicle$Previously_Insured)
+vehicle$Vehicle_Damage <- factor(vehicle$Vehicle_Damage)
+
+vehicle$Vehicle_Age <- factor(vehicle$Vehicle_Age)
+
+vehicle$Region_Code <-ifelse(vehicle$Region_Code %in% c(9,23,25,33,44,50,34,36,42), "Northeast", 
+                             ifelse(vehicle$Region_Code %in% c(18,17,26,39,55,19,20,27,29,31,38,46), "Midwest",
+                                    ifelse(vehicle$Region_Code %in% c(10,11,12,13,24,37,45,51,54,1,21,28,47,5,22,40,48),"South",
+                                           ifelse(vehicle$Region_Code %in% c(4,8,16,35,30,49,32,56,2,6,15,41,53),"West","Hogwarts"))))
+
+vehicle$Region_Code <- factor(vehicle$Region_Code)
+
+corrplot(cor (vehicle[c(3,9,10,11,12)]), method = "number", type="upper", col=NULL)
+
+vehicle$Response <- factor(vehicle$Response)
+
+```
+
+## t-Test for numerical variables
+
+A t-test is a type of inferential statistic used to determine if there is a significant difference between the means of two groups, which may be related in certain features.The t-test is one of many tests used for the purpose of hypothesis testing in statistics.Calculating a t-test requires three key data values. They include the difference between the mean values from each data set (called the mean difference), the standard deviation of each group, and the number of data values of each group.For t-Test, we split the original dataset "vehicle" into subsets of customers who "accepted" or "rejected" the insurance.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+accepted <- subset(vehicle,Response==1)
+rejected <- subset(vehicle,Response==0)
+
+```
+
+### t-Test for Age
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='TRUE'}
+
+tage95_acpt = t.test(x=accepted$Age, conf.level=0.95 )
+tage95_acpt
+
+tage95_rjct = t.test(x=rejected$Age, conf.level=0.95 )
+tage95_rjct
+
+```
+
+### t-Test for Policy Sales Channel
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='TRUE'}
+
+tpsc95_acpt = t.test(x=accepted$Policy_Sales_Channel, conf.level=0.95 )
+tpsc95_acpt
+
+tpsc95_rjct = t.test(x=rejected$Policy_Sales_Channel, conf.level=0.95 )
+tpsc95_rjct
+
+```
+
+### t-Test for Annual Premium
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='TRUE'}
+
+tap95_acpt = t.test(x=accepted$Annual_Premium, conf.level=0.95 )
+tap95_acpt
+
+tap95_rjct = t.test(x=rejected$Annual_Premium, conf.level=0.95 )
+tap95_rjct
+
+```
+
+### t-Test for Vintage
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='TRUE'}
+
+tvin95_acpt = t.test(x=accepted$Vintage, conf.level=0.95 )
+tvin95_acpt
+
+tvin95_rjct = t.test(x=rejected$Vintage, conf.level=0.95 )
+tvin95_rjct
+
+```
+
+From t-test we can conclude that p-value of all numerical variables for accepted and rejected sub-groups are less than alpha (0.05). Hence, the NULL Hypothesis can be rejected, i.e, the mean of accepted and rejected is not same as the mean of the population dataset
+
+## χ² test for categorical variables
+
+We use Chi-square (χ²) test for the categorical variables - Gender, driving License, Region Code, Previously Insured, Vehicle Age, Vehicle damage and Response to establish dependency. We have used "Test of Independence". If the p-value is less than 0.05, which is our alpha, we can conclude that our variables are not independent, we fail to reject the null hypothesis and it is statistically significant for our model.
+
+### χ² test for Gender
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE, results='TRUE'}
+
+ct <- table(vehicle$Gender,vehicle$Response)
+
+chisq.test(ct)
+
+paste0("Alpha value is set as 0.05 and p -value from Pearson's test is: ", chisq.test(ct)$p.value)
+
+paste0(ifelse(chisq.test(ct)$p.value< 0.05, "Gender is not independent of response","Gender is independent of response"))
+
+```
+
+### χ² test for Driving License
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE, results='TRUE'}
+
+ct <- table(vehicle$Driving_License,vehicle$Response)
+
+chisq.test(ct)
+
+paste0("Alpha value is set as 0.05 and p -value from Pearson's test is: ", chisq.test(ct)$p.value)
+
+paste0(ifelse(chisq.test(ct)$p.value< 0.05, "Driving License is not independent of response","Driving License is independent of response"))
+```
+
+### χ² test for Region Code
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE, results='TRUE'}
+
+ct <- table(vehicle$Region_Code,vehicle$Response)
+
+chisq.test(ct)
+
+paste0("Alpha value is set as 0.05 and p -value from Pearson's test is: ", chisq.test(ct)$p.value)
+
+paste0(ifelse(chisq.test(ct)$p.value< 0.05, "Region Code is not independent of response","Region Code is independent of response"))
+```
+
+### χ² test for Previously Insured
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE, results='TRUE'}
+
+ct <- table(vehicle$Previously_Insured,vehicle$Response)
+
+chisq.test(ct)
+
+paste0("Alpha value is set as 0.05 and p -value from Pearson's test is: ", chisq.test(ct)$p.value)
+
+paste0(ifelse(chisq.test(ct)$p.value< 0.05, "Previously Insured is not independent of response","Previously Insured is independent of response"))
+```
+
+### χ² test for Vehicle Age
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE, results='TRUE'}
+
+ct <- table(vehicle$Vehicle_Age,vehicle$Response)
+
+chisq.test(ct)
+
+paste0("Alpha value is set as 0.05 and p -value from Pearson's test is: ", chisq.test(ct)$p.value)
+
+paste0(ifelse(chisq.test(ct)$p.value< 0.05, "Vehicle Age is not independent of response","Vehicle Age is independent of response"))
+
+```
+
+### χ² test for Vehicle Damage
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE, results='TRUE'}
+
+ct <- table(vehicle$Vehicle_Damage,vehicle$Response)
+
+chisq.test(ct)
+
+paste0("Alpha value is set as 0.05 and p -value from Pearson's test is: ", chisq.test(ct)$p.value)
+
+paste0(ifelse(chisq.test(ct)$p.value< 0.05, "Vehicle Damage is not independent of response","Vehicle Damage is independent of response"))
+
+```
+
+# Conclusion
+
+## Establishing correlation
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+# Assign integer values to character variables
+
+veh$Gender <- ifelse(veh$Vehicle_Damage == 'Male', 0,1)
+
+veh$Vehicle_Damage <- ifelse(veh$Vehicle_Damage == 'Yes', 1,0)
+
+veh$Vehicle_Age <- ifelse(veh$Vehicle_Age == '> 2 Years', 2,ifelse(veh$Vehicle_Age == '1-2 Year', 1, 0))
+
+#vehicle.cor= cor(vehicle[,c(3,4,5,6,9,10,11,12)])
+veh.cor= cor(veh)
+xkabledply(veh.cor)
+
+corrplot(veh.cor, method = "number", type="upper", col=NULL, title="Vehicle Correlation (without Factors", use="pairwise.complete.obs")
+
+```
+
+After looking at our hypothesis tests, we can conclude that - "NULL Hypothesis can be rejected". This means that numerical attributes have a statistically significant w.r.t our dependent variable - Response - and needs to be analysed further. After the tests, we did correlation, to understand which variables are "more" significant in impacting "Response" and we can conclude that vehicle_damage, previously_insured and vehicle_age have high correlation.
