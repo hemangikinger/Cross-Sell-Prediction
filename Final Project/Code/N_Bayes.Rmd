@@ -1,0 +1,100 @@
+---
+title: "NaiveBayes"
+author: "Sanchez_Sara"
+date: "12/3/2021"
+output: html_document
+---
+```{r init, include=F}
+# The package "ezids" (EZ Intro to Data Science) includes a lot of the helper functions we developed for the course. 
+# Some of the frequently used functions are loadPkg(), xkabledply(), xkablesummary(), uzscale(), etc.
+# Once installed, load the library.
+library(ezids)
+library(ggplot2)
+```
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+train<-read.csv("train.csv")
+str(train)
+```
+
+#Before building any models, we should make sure the variables are set up properly.
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+train$Gender =as.factor(train$Gender)
+train$Driving_License = as.factor(train$Driving_License)
+train$Region_Code= as.factor(train$Region_Code)
+train$Previously_Insured = as.factor(train$Previously_Insured)
+train$Vehicle_Age = as.factor(train$Vehicle_Age)
+train$Vehicle_Damage = as.factor(train$Vehicle_Damage)
+train$Response= as.factor(train$Response)
+```
+
+#####################################################################
+#NAIVE DE BAYES
+#####################################################################
+
+# Using caret library
+```{r echo=TRUE, message=FALSE, warning=FALSE, , echo=FALSE}
+library(lattice)
+library(caret)
+library(ggplot2)
+naive2 <- train(
+  x = train[1:5,c(2,3,6,7,8)],
+  y = train$Response[1:5] ,
+  method = "nb"#,  trControl = train_control
+)
+naive2.Prediction=predict(naive2, train[,c(2,3,6,7,8)], type = "raw")
+```
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, , echo=FALSE}
+Confusion = table(naive2.Prediction, train$Response)
+Accuracy = (Confusion[1,1]+Confusion[2,2])/sum(Confusion)
+confusionMatrix(naive2.Prediction,train$Response )
+```
+
+#####################################################################
+#Additional
+# Split the data in training and testing (75% and 25%)
+#####################################################################
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, , echo=FALSE}
+data<-read.csv("train.csv")
+#Before building any models, we should make sure the variables are set up properly.
+data$Gender =as.factor(data$Gender)
+data$Driving_License = as.factor(data$Driving_License)
+data$Region_Code= as.factor(data$Region_Code)
+data$Previously_Insured = as.factor(data$Previously_Insured)
+data$Vehicle_Age = as.factor(data$Vehicle_Age)
+data$Vehicle_Damage = as.factor(data$Vehicle_Damage)
+data$Response= as.factor(data$Response)
+#str(data)
+```
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, , echo=FALSE}
+n=dim(data)[1]
+set.seed(123)
+train=sample(1:n,size=round(n*0.75),replace=FALSE)
+data.Train=data[train,]
+data.Test=data[-train,]
+```
+
+#Using library e1071
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, , echo=FALSE}
+library(e1071)
+naive1 <- naiveBayes(Response ~ Gender + Age + Previously_Insured + Vehicle_Age + Vehicle_Damage, data = data.Train)
+naive1.Prediction.Train= predict(naive1,data.Train[,c(2,3,6,7,8)])
+naive1.Prediction.Test= predict(naive1,data.Test[,c(2,3,6,7,8)])
+```
+
+#Accuracy using confusionMatrix
+```{r echo=TRUE, message=FALSE, warning=FALSE, , echo=FALSE}
+confusionMatrix(naive1.Prediction.Train, data.Train$Response )
+confusionMatrix(naive1.Prediction.Test, data.Test$Response )
+
+```
+
+#The accuracy for the training is 75.25% and for testing is 75.23%
+
+
