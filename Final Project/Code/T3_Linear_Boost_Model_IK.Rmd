@@ -68,7 +68,6 @@ table(vehicle$Response)/dim(vehicle)[1]  # 12.26%
 paste0("From the plot we can say that there's imbalance in response. The individuals interested in purchasing a vehicle insurance are only 12.6%.")
 ```
 
-## INFERENTIAL STATISTICS - HYPOTHESIS TESTING
 
 ## Converting character variables into numerical for correlation
 ```{r , echo=FALSE, message=FALSE, warning=FALSE}
@@ -96,10 +95,6 @@ vehicle$Gender <- factor(vehicle$Gender)
 vehicle$Driving_License <- factor(vehicle$Driving_License)
 vehicle$Previously_Insured <- factor(vehicle$Previously_Insured)
 vehicle$Vehicle_Damage <- factor(vehicle$Vehicle_Damage)
-
-
-#vehicle$Vehicle_Age <- ifelse(vehicle$Vehicle_Age == '> 2 Years', 2,ifelse(vehicle$Vehicle_Age == '1-2 Year', 1, 0))
-
 vehicle$Vehicle_Age <- factor(vehicle$Vehicle_Age)
 
 vehicle$Region_Code <-ifelse(vehicle$Region_Code %in% c(9,23,25,33,44,50,34,36,42), "Northeast", 
@@ -108,8 +103,6 @@ vehicle$Region_Code <-ifelse(vehicle$Region_Code %in% c(9,23,25,33,44,50,34,36,4
                                            ifelse(vehicle$Region_Code %in% c(4,8,16,35,30,49,32,56,2,6,15,41,53),"West","Hogwarts"))))
 
 vehicle$Region_Code <- factor(vehicle$Region_Code)
-
-# vehicle$Policy_Sales_Channel <- factor(vehicle$Policy_Sales_Channel)
 
 corrplot(cor (vehicle[c(3,9,10,11,12)]), method = "number", type="upper", col=NULL)
 
@@ -183,5 +176,29 @@ plot(h)
 unloadPkg("pROC")
 
 paste0("Area under the curve is greater than 80% which indicates that the model is a good fit.")
+
+```
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+library(xgboost)
+
+mod2 <- xgboost(data = data.matrix(vehicle[,c(7,8)]), 
+ label = vehicle[,c(12)], 
+ eta = 0.1,
+ max_depth = 15, 
+ nround=25, 
+ subsample = 0.5,
+ colsample_bytree = 0.5,
+ seed = 1,
+ booster = "gbtree",
+ 
+ objective = "binary:logistic",
+ num_class = 12,
+ nthread = 3
+)
+
+summary(mod2)
+
+expcoeff = exp(coef(mod1))
 
 ```
