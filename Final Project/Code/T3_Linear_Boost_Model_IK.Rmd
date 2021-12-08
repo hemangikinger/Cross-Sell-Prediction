@@ -22,6 +22,10 @@ library(tidyverse)
 library(corrplot)
 library("ggplot2")
 library(dplyr) 
+library(randomForest)
+library(e1071)
+library(caret)
+library(ROSE)
 ```
 
 
@@ -69,7 +73,8 @@ paste0("From the plot we can say that there's imbalance in response. The individ
 ```
 
 
-## Converting character variables into numerical for correlation
+## Variable Conversion
+
 ```{r , echo=FALSE, message=FALSE, warning=FALSE}
 
 # Assign integer values to character variables
@@ -85,11 +90,6 @@ vehicle.cor= cor(vehicle)
 xkabledply(vehicle.cor)
 
 corrplot(vehicle.cor, method = "number", type="upper", col=NULL, title="Vehicle Correlation", use="pairwise.complete.obs")
-#
-```
-
-## Converting categorical variables into factors
-```{r , echo=FALSE, message=FALSE, warning=FALSE}
 
 vehicle$Region_Code <-ifelse(vehicle$Region_Code %in% c(9,23,25,33,44,50,34,36,42), 1, # "Northeast" 
                              ifelse(vehicle$Region_Code %in% c(18,17,26,39,55,19,20,27,29,31,38,46), 2, #"Midwest"
@@ -110,35 +110,33 @@ corrplot(cor (vehicle[c(3,9,10,11,12)]), method = "number", type="upper", col=NU
 
 vehicle$Response <- factor(vehicle$Response)
 
+#
 ```
 
-```{r , echo=FALSE, message=FALSE, warning=FALSE}
+## Data Balancing
 
-library(ROSE)
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
 
 vehicle <- ovun.sample(Response ~ ., data = vehicle, method = "over",N = 668798)$data
 
 vehicle_xgb <- ovun.sample(Response ~ ., data = vehicle_xgb, method = "over",N = 668798)$data
 
-# vehicle <- ovun.sample(Response ~ ., data = vehicle, method = "under", N = 93420)$data
-# 
-# vehicle_xgb <- ovun.sample(Response ~ ., data = vehicle_xgb, method = "under", N = 93420)$data
-
-
 ```
+
+## Feature Selection
 
 ```{r}
 loadPkg("leaps")
 
 regnonlin.forward10 <- regsubsets(Response ~ ., data = vehicle, nvmax = 10, method = "exhaustive")  
-# leaps, regsubsets: Model selection by exhaustive search, forward or backward stepwise, or sequential replacement
-#The plot will show the Adjust R^2 when using the variables across the bottom
+
 plot(regnonlin.forward10, scale = "adjr2", main = "Adjusted R^2")
-plot(regnonlin.forward10, scale = "bic", main = "BIC")
-plot(regnonlin.forward10, scale = "Cp", main = "Cp")
+
 summary(regnonlin.forward10)
+
 ```
 
+## Logistic Regression
 
 ```{r , echo=FALSE, message=FALSE, warning=FALSE}
 
@@ -153,7 +151,7 @@ All the coefficients are found significant (small p-values). All features have a
 
 We can also easily obtain the growth/decay factors for each variable. Notice that these factors apply to the odds-ratio, not the odds of being accepted. Nonetheless, these growth and decay factors are very useful in our analysis. The factors are the exponential of the coefficients:  
 
-```{r growthDecayFactors2, results='markup', collapse=F}
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
 
 expcoeff = exp(coef(mod1))
 
@@ -167,23 +165,9 @@ From these results, we can say, for example:
 * The effect of having a vehicle for more than 2 years, compared to less than 1 year, is boosting even more, by a factor of `r format(expcoeff[3],digit=4)`, again, for the log(odds-ratio).  
 * Customers with vehicle damage are likely to respond more, by a factor of `r format(expcoeff[4],digit=4)`, again, for the log(odds-ratio). 
 
-**Deviance Evaluation**
-
-Degree of Freedom for Null Deviance is set to 713 and for Residual Deviance is set to 710.
-
-```{r Deviance Evaluation, echo=TRUE}
-
-summary_mod1 <- summary(mod1)
-
-paste0(ifelse(pchisq(summary_mod1$null.deviance, nrow(vehicle)-1, lower.tail=F) < 0.05,
-              ifelse(pchisq(summary_mod1$deviance, nrow(vehicle)-4, lower.tail=F) < 0.05, "Model is not a good fit","Model is a good fit")
-              ,"Model is a good fit"))
-
-
-```
 **Confusion Matrix**
 
-```{r Confusion Matrix, echo=TRUE}
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
 
 loadPkg("regclass")
 
@@ -191,47 +175,79 @@ xkabledply( confusion_matrix(mod1), title = "Confusion matrix from Logit Model" 
 
 unloadPkg("regclass")
 
-paste0 ("Accuracy of the model is ",round((26295 + 45728)/93420 * 100,2), "%. But since we have an unbalanced data, Confusion Matrix won't be the best metric")
+paste0 ("Accuracy of the model is ",round((187714 + 327603)/668798 * 100,2), "%. But since we have an unbalanced data, Confusion Matrix won't be the best metric")
 
 ```
 **Receiver-Operator-Characteristic (ROC) curve and Area-Under-Curve (AUC)**
 
-```{r roc_auc}
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
 loadPkg("pROC") 
+
 prob <- predict(mod1, type = "response" )
 vehicle$prob<- prob
 h <- roc(Response~prob, data=vehicle)
 auc(h) # area-under-curve prefer 0.8 or higher.
 plot(h)
 
-unloadPkg("pROC")
+paste0("Area under the curve is greater than 80% which indicates that the model is a good fit.")
+
+```
+
+## Random Forest
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+library(randomForest)
+
+train <- sample(nrow(vehicle_xgb), 0.75*nrow(vehicle_xgb), replace = FALSE)
+TrainSet <- vehicle_xgb[train,]
+ValidSet <- vehicle_xgb[-train,]
+
+rf <- randomForest(Response ~ Vehicle_Age + Vehicle_Damage, data = TrainSet, proximity=FALSE)
+
+summary(rf)
+```
+
+
+**Random Forest Confusion Matrix**
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+# predTrain <- predict(rf, TrainSet, type = "Response")
+# table(predTrain, TrainSet$Response)
+# predValid <- predict(rf, ValidSet, type = "Response")
+# 
+# # Checking classification accuracy
+# mean(predValid == ValidSet$Response)                    
+# table(predValid,ValidSet$Response)
+# 
+# 
+# loadPkg("regclass")
+# xkabledply( table(predValid,ValidSet$Response), title = "Confusion matrix from Random Forest Model" )
+# unloadPkg("regclass")
+# 
+# paste0 ("Accuracy of the model is ",round((55955 + 98190)/200640 * 100,2), "%.")
+
+```
+
+**Random Forest Receiver-Operator-Characteristic (ROC) curve and Area-Under-Curve (AUC)**
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+prob <- predict(rf, type = "response" )
+TrainSet$prob<- prob
+h <- roc(Response~prob, data=TrainSet)
+auc(h) # area-under-curve prefer 0.8 or higher.
+plot(h)
+
 
 paste0("Area under the curve is greater than 80% which indicates that the model is a good fit.")
 
 ```
 
 
-
-```{r , echo=FALSE, message=FALSE, warning=FALSE}
-
-n = nrow(vehicle)
-
-label = as.integer(vehicle$Response)-1
-
-train.index=sample(1:n,size=round(n*0.70),replace=FALSE)
-train.data=vehicle[train.index,]
-train.label = label[train.index]
-test.data = vehicle[-train.index,]
-test.label = label[-train.index]
-
-
-library(class)
-vehicle_pred <- knn(train = train.data, test = test.data, cl=train.label, k=50)
-tb <- table(vehicle_pred,test.label)
-accuracy <- function(x){sum(diag(x)/(sum(rowSums(x)))) * 100}
-accuracy(tb)
-
-```
+## Extreme Gradient Boosting
 
 ```{r , echo=FALSE, message=FALSE, warning=FALSE}
 library(xgboost)
@@ -270,7 +286,7 @@ params = list(
 
 
 # Train the XGBoost classifer
-xgb.fit=xgb.train(
+xgb=xgb.train(
   params=params,
   data=xgb.train,
   nrounds=500,
@@ -281,9 +297,9 @@ xgb.fit=xgb.train(
 )
 
 # Review the final model and results
-xgb.fit
+xgb
 
-xgb.pred = predict(xgb.fit,test.data,reshape=T)
+xgb.pred = predict(xgb,test.data,reshape=T)
 xgb.pred = as.data.frame(xgb.pred)
 colnames(xgb.pred) = levels(species)
 
@@ -296,63 +312,140 @@ print(paste("Final Accuracy =",sprintf("%1.2f%%", 100*result)))
 
 ```
 
+**XGBoost Confusion Matrix**
 
 ```{r , echo=FALSE, message=FALSE, warning=FALSE}
 
-library(randomForest)
+# loadPkg("regclass")
+# xkabledply( table(as.numeric(xgb.pred$prediction),as.numeric(xgb.pred$label)), title = "Confusion matrix from XGBoost Model" )
+# unloadPkg("regclass")
+# 
+# paste0 ("Accuracy of the model is ",round((60525 + 81257)/167200 * 100,2), "%.")
+
+
+```
+**XGBoost Receiver-Operator-Characteristic (ROC) curve and Area-Under-Curve (AUC)**
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+h <- roc(as.numeric(label)~as.numeric(prediction), data=xgb.pred)
+auc(h) # area-under-curve prefer 0.8 or higher.
+plot(h)
+
+
+paste0("Area under the curve is greater than 80% which indicates that the model is a good fit.")
+
+```
+
+## Naïve Bayes Classifier
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+#Using library e1071
+
+n=dim(vehicle)[1]
+set.seed(123)
+train=sample(1:n,size=round(n*0.75),replace=FALSE)
+df_train=vehicle[train,]
+df_test=vehicle[-train,]
+
+
+naive1 <- naiveBayes(Response ~ Vehicle_Age + Vehicle_Damage, data = df_train)
+
+df_train$naive1.Prediction.Train= predict(naive1,df_train[,c(7,8)])
+df_test$naive1.Prediction.Test= predict(naive1,df_test[,c(7,8)])
+
+
+#Accuracy using confusionMatrix
+
+confusionMatrix(naive1.Prediction.Train, df_train$Response)
+confusionMatrix(naive1.Prediction.Test, df_test$Response)
+
+```
+
+**Naïve Bayes Confusion Matrix**
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+# loadPkg("regclass")
+# xkabledply( table(df_test$naive1.Prediction.Test, df_test$Response), title = "Confusion matrix from XGBoost Model" )
+# unloadPkg("regclass")
+# 
+# paste0 ("Accuracy of the model is ",round((68451 + 83720)/200639 * 100,2), "%.")
+
+```
+
+
+**Naïve Bayes Receiver-Operator-Characteristic (ROC) curve and Area-Under-Curve (AUC)**
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+h <- roc(df_test$Response~as.numeric(df_test$naive1.Prediction.Test), data=df_test)
+auc(h) # area-under-curve prefer 0.8 or higher.
+plot(h)
+
+
+```
+
+## DECISION TREES
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+loadPkg("rpart")
+loadPkg("caret")
+
+
+confusionMatrixResultDf = data.frame( Depth=numeric(0), Accuracy= numeric(0), Sensitivity=numeric(0), Specificity=numeric(0), Pos.Pred.Value=numeric(0), Neg.Pred.Value=numeric(0), Precision=numeric(0), Recall=numeric(0), F1=numeric(0), Prevalence=numeric(0), Detection.Rate=numeric(0), Detection.Prevalence=numeric(0), Balanced.Accuracy=numeric(0), row.names = NULL )
+
+for (deep in 2:6) {
+  kfit <- rpart(Response ~ Vehicle_Age + Vehicle_Damage, data=vehicle, method="class", control = list(maxdepth = deep) )
+  cm = confusionMatrix( predict(kfit, type = "class"), reference = vehicle[, "Response"] ) # from caret library
+  cmaccu = cm$overall['Accuracy']
+  cmt = data.frame(Depth=deep, Accuracy = cmaccu, row.names = NULL ) # initialize a row of the metrics 
+  cmt = cbind( cmt, data.frame( t(cm$byClass) ) ) # the dataframe of the transpose, with k valued added in front
+  confusionMatrixResultDf = rbind(confusionMatrixResultDf, cmt)
+  # print("Other metrics : ")
+}
+
+unloadPkg("caret")
+
+```
+
+**DECISION TREES Confusion Matrix**
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+xkabledply(confusionMatrixResultDf, title="Response Classification Trees summary with varying MaxDepth")
+
+```
+
+**DECISION TREES Tree Plot**
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+loadPkg("rpart.plot")
+rpart.plot(kfit)
+loadPkg("rattle") # For fancyRpartPlot (Trees) Answer "no" on installing from binary source
+fancyRpartPlot(kfit)
+```
+
+## K-Nearest Neighbours Classifer
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
 
 n = nrow(vehicle)
-train.index = sample(n,floor(0.75*n))
-train.data = as.matrix(vehicle_xgb[train.index,])
+
+label = as.integer(vehicle$Response)-1
+
+train.index=sample(1:n,size=round(n*0.75),replace=FALSE)
+train.data=vehicle[train.index,]
 train.label = label[train.index]
-test.data = as.matrix(vehicle_xgb[-train.index,])
+test.data = vehicle[-train.index,]
 test.label = label[-train.index]
 
 
-# train <- sample(nrow(vehicle), 0.7*nrow(vehicle), replace = FALSE)
-# TrainSet <- vehicle[train,]
-# ValidSet <- vehicle[-train,]
-
-rf <- randomForest(Response ~ ., data = vehicle, proximity=FALSE)
-
-
-summary(rf)
-
-# Predicting on train set
-predTrain <- predict(rf, train.data, type = "Response")
-
-table(predTrain, vehicle$Response)
-
-predValid <- predict(rf, test.data, type = "Response")
-
-# Checking classification accuracy
-mean(predValid == ValidSet$Response)                    
-table(predValid,test.data$Response)
-
-
-```
-
-**Receiver-Operator-Characteristic (ROC) curve and Area-Under-Curve (AUC)**
-
-```{r RFroc_auc}
-loadPkg("regclass")
-
-xkabledply( confusion_matrix(rf), title = "Confusion matrix from Logit Model" )
-
-unloadPkg("regclass")
-
-paste0 ("Accuracy of the model is ",round((344 + 152)/714 * 100,2), "%. But since we have an unbalanced data, Confusion Matrix won't be the best metric")
-```
-
-```{r , echo=FALSE, message=FALSE, warning=FALSE}
-
-control <- trainControl(method="repeatedcv", number=10, repeats=3, savePredictions=TRUE, classProbs=TRUE)
-algorithmList <- c('xgb.fit', 'mod1', 'glm', 'knn', 'svmRadial')
-set.seed(seed)
-models <- caretList(Class~., data=dataset, trControl=control, methodList=algorithmList)
-results <- resamples(models)
-summary(results)
-dotplot(results)
-
+library(class)
+vehicle_pred <- knn(train = train.data, test = test.data, cl=train.label, k=3)
+tb <- table(vehicle_pred,test.label)
+accuracy <- function(x){sum(diag(x)/(sum(rowSums(x)))) * 100}
+accuracy(tb)
 
 ```
