@@ -1,0 +1,523 @@
+---
+title: "Insurance Cross-Sell Summary"
+author: "T3 - Linear Boost"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+  code_folding: hide
+number_sections: true
+toc: yes
+toc_float: yes
+pdf_document:
+  toc: yes
+toc_depth: '3'
+---
+
+```{r init, include=F}
+library(ezids)
+library(tidyverse)
+library(corrplot)
+library("ggplot2")
+library(dplyr) 
+library(randomForest)
+library(e1071)
+library(caret)
+library(ROSE)
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## CROSS-SELL
+
+Cross-selling is the practice of marketing additional products to existing customers, often practiced in the financial services industry. Financial advisers can often earn additional revenue by cross-selling additional products and services to their existing client base.In our case, for an insurance company that provides medical insurance to its customers wanted to know how many of their existing policyholders (customers) from last year will also be interested in Vehicle Insurance provided by the company.
+
+### SMART Problem
+
+Whether a customer would be interested in an additional insurance service like vehicle Insurance is extremely helpful for the company because it can then accordingly plan its communication strategy to reach out to those customers and optimize its business model and revenue. From our EDA, we found that vehicle damage, previously insured and vehicle age have significant impact on whether a customer will buy vehicle insurance or not. We’ll use this understanding to build a classification model.
+
+
+## Raw Data
+
+```{r cross-sell RAW Data, echo=FALSE, warning=FALSE}
+
+vehicle<-read.csv("train.csv")
+
+str(vehicle)
+
+```
+
+## Data Distribution
+
+```{r Data Distribution}
+
+xkabledply(summary(vehicle))
+
+```
+
+We will be able to get a idea on the outliers here by the percentiles ( In the Annual_Premium the 3rd quartile is 39400 and the max is 540165 this represents the outliers in this column)
+
+## Trend of High Correlation Variables
+
+### Vehicle Damage v/s Response
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+vehicle %>% ggplot(aes(x=Vehicle_Damage)) +geom_bar(stat = "count") + ggtitle("Count of Vehicle_Damage")
+
+vd_vs_r <- table(vehicle$Response, vehicle$Vehicle_Damage)
+
+barplot(vd_vs_r,
+        main = "Response with Vehicle Damage",
+        xlab = "Vehicle Damage", 
+        ylab = "Frequency",
+        col = c("darkblue", "red"),
+        legend.text = c("Reject", "Accept"),
+        beside = TRUE)
+
+```
+
+Observation: The distribution of customers with or without vehicle damage is almost same. Additionally, the ones with vehicle damage are more interested in vehicle insurance.
+
+### Previously Insured v/s Response
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(vehicle,aes(x=ifelse(Previously_Insured==1,"Yes","No"))) +geom_bar(stat = "count") + labs(x="Previously_Insured",y="Count") + ggtitle("Count of Driving_License")
+
+pi_vs_r <- table(vehicle$Response, vehicle$Previously_Insured)
+
+barplot(pi_vs_r,
+        main = "Response with Previously Insured",
+        xlab = "Previously Insured", 
+        ylab = "Frequency",
+        col = c("darkblue", "red"),
+        names.arg = c("No", "Yes"),
+        legend.text = c("Reject", "Accept"),
+        beside = TRUE)
+
+```
+
+Observation: Customer who don't have an insurance are higher in number than those who have insurance. Also they are more likely to buy the insurance.
+
+### Vehicle Age v/s Response
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+vehicle %>% ggplot(aes(x=Vehicle_Age)) +geom_bar(stat = "count") + ggtitle("Count of Vehicle_Age")
+
+va_vs_r <- table(vehicle$Response, vehicle$Vehicle_Age)
+
+barplot(va_vs_r,
+        main = "Response with Vehicle Age",
+        xlab = "Vehicle Age", 
+        ylab = "Frequency",
+        col = c("darkblue", "red"),
+        legend.text = c("Reject", "Accept"),
+        beside = TRUE)
+```
+
+Observation: Customer who own a vehicle for more than 2 years are not many but some of them are interested in getting vehicle insurance. Mostly customers with vehicle for 1-2 years are interested in vehicle insurance.
+
+## Variable Conversion
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+# Assign integer values to character variables
+
+vehicle$Gender <- ifelse(vehicle$Gender == 'Male', 0,1)
+
+vehicle$Vehicle_Damage <- ifelse(vehicle$Vehicle_Damage == 'Yes', 1,0)
+
+vehicle$Vehicle_Age <- ifelse(vehicle$Vehicle_Age == '> 2 Years', 2,ifelse(vehicle$Vehicle_Age == '1-2 Year', 1, 0))
+
+vehicle.cor= cor(vehicle)
+xkabledply(vehicle.cor)
+
+corrplot(vehicle.cor, method = "number", type="upper", col=NULL, title="Vehicle Correlation", use="pairwise.complete.obs")
+
+vehicle$Region_Code <-ifelse(vehicle$Region_Code %in% c(9,23,25,33,44,50,34,36,42), 1, # "Northeast" 
+                             ifelse(vehicle$Region_Code %in% c(18,17,26,39,55,19,20,27,29,31,38,46), 2, #"Midwest"
+                                    ifelse(vehicle$Region_Code %in% c(10,11,12,13,24,37,45,51,54,1,21,28,47,5,22,40,48), 3, #"South"
+                                           ifelse(vehicle$Region_Code %in% c(4,8,16,35,30,49,32,56,2,6,15,41,53),4,5)))) # "West","Hogwarts"
+
+
+vehicle$Response <- factor(vehicle$Response)
+
+vehicle_xgb <- vehicle
+
+vehicle_dt <- vehicle
+
+vehicle$Gender <- factor(vehicle$Gender)
+vehicle$Driving_License <- factor(vehicle$Driving_License)
+vehicle$Previously_Insured <- factor(vehicle$Previously_Insured)
+vehicle$Vehicle_Damage <- factor(vehicle$Vehicle_Damage)
+vehicle$Vehicle_Age <- factor(vehicle$Vehicle_Age)
+
+vehicle$Region_Code <- factor(vehicle$Region_Code)
+
+#
+```
+
+## Response Variable Trend
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+vehicle %>% ggplot(aes(x=as.factor(Response))) +geom_bar(stat = "count") + ggtitle("Response Variable Count")
+
+table(vehicle$Response)/dim(vehicle)[1]  # 12.26%
+
+```
+
+Observation: From the plot we can say that there's imbalance in customer response. The individuals interested in purchasing a vehicle insurance are only 12.6%. To better model the data, we'll do data balancing first.
+
+## Data Balancing
+
+We'll be using "over-balancing" technique for our data set.
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+vehicle <- ovun.sample(Response ~ ., data = vehicle, method = "over",N = 668798)$data
+
+vehicle_xgb <- ovun.sample(Response ~ ., data = vehicle_xgb, method = "over",N = 668798)$data
+
+```
+
+NOTE: vehicle_xgb data set has been created specifically for random forest and XG-Boost model which requires all variables to numeric/integer.
+
+## LOGISTIC REGRESSION
+
+This is a process of modelling the probability of a discrete outcome given an input variable. The most common logistic regression models a binary outcome; something that can take two values such as true/false, yes/no, and so on. Logistic regression is a useful analysis method for classification problems, where you are trying to determine if a new sample fits best into a category
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+mod1 <- glm(Response ~ Vehicle_Age + Vehicle_Damage, data = vehicle, binomial(link = "logit"))
+
+summary(mod1)
+
+expcoeff = exp(coef(mod1))
+
+```
+All the coefficients are found significant (small p-values). All features have a positive effect on customer response. These are reasonable results and confirms our common beliefs.  
+
+We can also easily obtain the growth/decay factors for each variable. Notice that these factors apply to the odds-ratio, not the odds of being accepted. Nonetheless, these growth and decay factors are very useful in our analysis. The factors are the exponential of the coefficients:  
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+expcoeff = exp(coef(mod1))
+
+xkabledply( as.table(expcoeff), title = "Exponential of coefficients of regression model" )
+
+```
+
+From these results, we can say, for example:
+
+* The effect of having a vehicle for 1 to 2 years, compared to less than 1 year, is boosting by a factor of `r format(expcoeff[2],digit=4)`, for the log(odds-ratio).  Any factor less than 1 represents a negative effect.
+* The effect of having a vehicle for more than 2 years, compared to less than 1 year, is boosting even more, by a factor of `r format(expcoeff[3],digit=4)`, again, for the log(odds-ratio).  
+* Customers with vehicle damage are likely to respond more, by a factor of `r format(expcoeff[4],digit=4)`, again, for the log(odds-ratio). 
+
+**Confusion Matrix**
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+loadPkg("regclass")
+
+xkabledply( confusion_matrix(mod1), title = "Confusion matrix from Logit Model" )
+
+unloadPkg("regclass")
+
+```
+
+Observation: Accuracy of the model is 77.01% and Precision is 69.06%. We'll also run ROC/AUC metric to understand the model better.
+
+**Receiver-Operator-Characteristic (ROC) curve and Area-Under-Curve (AUC)**
+
+Sensitivity of the model is 97.89% and Specificity is 56.13%. Let's plot the curve now.
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+loadPkg("pROC") 
+
+prob <- predict(mod1, type = "response" )
+vehicle$prob<- prob
+h <- roc(Response~prob, data=vehicle)
+auc(h) # area-under-curve prefer 0.8 or higher.
+plot(h)
+
+```
+
+Observation: Area under the curve is 80.16% which indicates that the model is a good fit.
+
+Logistic Regression model does a good job (80%) at explaining the variation in customer response for vehicle insurance. We understand that people with older vehicles or with damage to their vehicles are more likely to accept vehicle insurance.
+
+What we now want to analyse is how can we better predict the customer response. So, we'll try a few tree-based methods: Decision Tree, Random Forest and XGBoost.
+
+## DECISION TREE
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+loadPkg("rpart")
+loadPkg("caret")
+
+confusionMatrixResultDf = data.frame( Depth=numeric(0), Accuracy= numeric(0), Sensitivity=numeric(0), Specificity=numeric(0), Pos.Pred.Value=numeric(0), Neg.Pred.Value=numeric(0), Precision=numeric(0), Recall=numeric(0), F1=numeric(0), Prevalence=numeric(0), Detection.Rate=numeric(0), Detection.Prevalence=numeric(0), Balanced.Accuracy=numeric(0), row.names = NULL )
+
+for (deep in 2:6) {
+  kfit <- rpart(Response ~ Vehicle_Age + Vehicle_Damage, data=vehicle, method="class", control = list(maxdepth = deep) )
+  cm = confusionMatrix( predict(kfit, type = "class"), reference = vehicle[, "Response"] )
+  cmaccu = cm$overall['Accuracy']
+  cmt = data.frame(Depth=deep, Accuracy = cmaccu, row.names = NULL )
+  cmt = cbind( cmt, data.frame( t(cm$byClass) ) )
+  confusionMatrixResultDf = rbind(confusionMatrixResultDf, cmt)
+  # print("Other metrics : ")
+}
+
+unloadPkg("caret")
+
+```
+
+**Decision Tree Confusion Matrix**
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+xkabledply(confusionMatrixResultDf, title="Response Classification Trees summary with varying MaxDepth")
+
+```
+
+Observation: As can be seen from confusion matrix, decision tree model explains about 77% of variation in customer response, which is similar to that of logistic regression model. To further improve our prediction power, we'll go ahead and try the ensemble tree methods.
+
+
+## RANDOM FOREST
+
+A supervised learning algorithm that is based on the ensemble learning method and many Decision Trees. Random Forest uses a Bagging technique, so all calculations are run in parallel and there is no interaction between the Decision Trees when building them.
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+vehicle_dt <- ovun.sample(Response ~ ., data = vehicle_dt, method = "under",N = 93420)$data #93420
+
+train <- sample(nrow(vehicle_dt), 0.70*nrow(vehicle_dt), replace = FALSE)
+TrainSet <- vehicle_dt[train,]
+ValidSet <- vehicle_dt[-train,]
+
+rf <- randomForest(Response ~ Vehicle_Age + Vehicle_Damage, data = TrainSet, method="class", proximity=FALSE)
+
+summary(rf)
+```
+
+**Random Forest Confusion Matrix**
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+loadPkg("caret")
+
+confusionMatrixResultDf = data.frame(Accuracy= numeric(0), Sensitivity=numeric(0), Specificity=numeric(0), Pos.Pred.Value=numeric(0), Neg.Pred.Value=numeric(0), Precision=numeric(0), Recall=numeric(0), F1=numeric(0), Prevalence=numeric(0), Detection.Rate=numeric(0), Detection.Prevalence=numeric(0), Balanced.Accuracy=numeric(0), row.names = NULL )
+
+cm = confusionMatrix( predict(rf, type = "class"), reference = TrainSet[, "Response"] )
+cmaccu = cm$overall['Accuracy']
+cmt = data.frame(Accuracy = cmaccu, row.names = NULL )
+cmt = cbind( cmt, data.frame( t(cm$byClass) ) )
+confusionMatrixResultDf = rbind(confusionMatrixResultDf, cmt)
+
+xkabledply(confusionMatrixResultDf, title="Random Forest Summary")
+
+```
+
+Observation: As can be seen from confusion matrix, random forest accurately explains about 77.26% of variation in customer response, which is slightly better to that of logistic regression model. Let us look at ROC/AUC metric also:
+
+**Random Forest Receiver-Operator-Characteristic (ROC) curve and Area-Under-Curve (AUC)**
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+library("pROC")
+
+prob <- predict(rf, type = "class" )
+TrainSet$prob <- as.numeric(prob)
+h <- roc(Response~prob, data=TrainSet)
+auc(h) # area-under-curve prefer 0.8 or higher.
+plot(h)
+
+```
+
+Observation: Area under the curve is less than 80% which indicates that the model is not a very good fit.
+
+Random Forest model does a decent job (76%) at explaining the variation in customer response for vehicle insurance. This model used a bagging technique but we also have something called "boosting". Let's try that through Extreme Gradient Boosting algorithm.
+
+## EXTEREME GRADIENT BOOSTING (XGBoost)
+
+Refers to a class of ensemble machine learning algorithms constructed from decision tree models. Models are fit using any arbitrary differentiable loss function and gradient descent optimization algorithm. This gives the technique its name, “gradient boosting,” as the loss gradient is minimized as the model is fit.
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+library(xgboost)
+
+vehicle_xgb$Response <- factor(vehicle_xgb$Response)
+
+# Convert the Species factor to an integer class starting at 0
+# This is picky, but it's a requirement for XGBoost
+species = vehicle_xgb$Response
+label = as.integer(vehicle_xgb$Response)-1
+vehicle_xgb$Response = NULL
+
+n = nrow(vehicle_xgb)
+train.index = sample(n,floor(0.75*n))
+train.data = as.matrix(vehicle_xgb[train.index,])
+train.label = label[train.index]
+test.data = as.matrix(vehicle_xgb[-train.index,])
+test.label = label[-train.index]
+
+# Transform the two data sets into xgb.Matrix
+xgb.train = xgb.DMatrix(data=train.data,label=train.label)
+xgb.test = xgb.DMatrix(data=test.data,label=test.label)
+
+num_class = length(levels(species))
+params = list(
+  booster="gbtree",
+  eta=0.1,
+  max_depth=10,
+  gamma=3,
+  subsample=0.75,
+  colsample_bytree=0.75,
+  objective="multi:softprob",
+  eval_metric="merror",
+  num_class=num_class
+)
+
+
+# Train the XGBoost classifer
+xgb=xgb.train(
+  params=params,
+  data=xgb.train,
+  nrounds=500,
+  nthreads=1,
+  early_stopping_rounds=10,
+  watchlist=list(val1=xgb.train,val2=xgb.test),
+  verbose=0
+)
+
+# Review the final model and results
+xgb
+
+xgb.pred = predict(xgb,test.data,reshape=T)
+xgb.pred = as.data.frame(xgb.pred)
+colnames(xgb.pred) = levels(species)
+
+xgb.pred$prediction = apply(xgb.pred,1,function(x) colnames(xgb.pred)[which.max(x)])
+xgb.pred$label = levels(species)[test.label+1]
+
+# Calculate the final accuracy
+result = sum(xgb.pred$prediction==xgb.pred$label)/nrow(xgb.pred)
+print(paste("Final Accuracy =",sprintf("%1.2f%%", 100*result)))
+
+```
+
+**XGBoost Confusion Matrix**
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+loadPkg("regclass")
+
+xkabledply( table(as.numeric(xgb.pred$prediction),as.numeric(xgb.pred$label)), title = "Confusion matrix from XGBoost Model" )
+
+unloadPkg("regclass")
+
+```
+
+Observation: Accuracy of the model is 84.83% and Precision is 97.18%. We'll also run ROC/AUC metric to understand the model better.
+
+**XGBoost Receiver-Operator-Characteristic (ROC) curve and Area-Under-Curve (AUC)**
+
+Sensitivity of the model is 77.96% and Specificity is 96.24%. Let's plot the curve now.
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+h <- roc(as.numeric(label)~as.numeric(prediction), data=xgb.pred)
+auc(h) # area-under-curve prefer 0.8 or higher.
+plot(h)
+
+```
+
+Observation: Area under the curve is almost 85% which indicates that the model is a very good fit.
+
+Extreme Gradient Boosting does an excellent job (85%) at explaining the variation in customer response for vehicle insurance, which is significant improvement over Logistic Regression, Decision Tree and Random Forest Model.
+
+The ensemble tree based has proven to be of great benefit. Let's try a probabilistic model also - introducing Naïve Bayes Classifier.
+
+## Naïve Bayes Classifier
+
+It is a classification technique based on Bayes’ Theorem with an assumption of independence among predictors. In simple terms, a Naive Bayes classifier assumes that the presence of a particular feature in a class is unrelated to the presence of any other feature
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+#Using library e1071
+
+n=dim(vehicle)[1]
+set.seed(123)
+train=sample(1:n,size=round(n*0.75),replace=FALSE)
+df_train=vehicle[train,]
+df_test=vehicle[-train,]
+
+
+naive1 <- naiveBayes(Response ~ Vehicle_Age + Vehicle_Damage, data = df_train)
+
+df_train$naive1.Prediction.Train= predict(naive1,df_train[,c(7,8)])
+df_test$naive1.Prediction.Test= predict(naive1,df_test[,c(7,8)])
+
+
+```
+
+**Naïve Bayes Confusion Matrix**
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+loadPkg("regclass")
+xkabledply( table(df_test$naive1.Prediction.Test, df_test$Response), title = "Confusion matrix from XGBoost Model" )
+unloadPkg("regclass")
+
+```
+
+Observation: Accuracy of the model is 75.75% and Precision is 83.18%. We'll also run ROC/AUC metric to understand the model better.
+
+**Naïve Bayes Receiver-Operator-Characteristic (ROC) curve and Area-Under-Curve (AUC)**
+
+Sensitivity of the model is 72.52% and Specificity is 80.13%. Let's plot the curve now.
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+loadPkg("pROC")
+
+h <- roc(df_test$Response~as.numeric(df_test$naive1.Prediction.Test), data=df_test)
+
+auc(h)
+
+plot(h)
+
+```
+
+Observation: Area under the curve is less than 80% which indicates that the model is not doing better than any of the models we tried before.
+
+## CONCLUSION
+
+Our analysis of customer response data helps us get very useful insights into the practice of cross-selling. After doing an exploratory data analysis on our data set, and considering the interactions among them, we were able to narrow down better SMART questions to assess what could actually result in customer accepting a vehicle insurance. For instance, we realized that there's a lot of people who are not interested in vehicle insurance, despite not having previous vehicle insurance.
+
+We conducted t-test and χ² test of independence to get answer to our SMART questions. Notably, we found the following:
+
+1. If a customer has vehicle damage it increases the chance of them buying vehicle insurance.
+
+2. If a customer has an old vehicle, they are more likely to purchase vehicle insurance compared to a customer with new vehicle.
+
+3. If a customer already has vehicle insurance, well, they won't buy another one.
+
+Furthermore, we decided to run multiple Classification Models to better understand the impact and also uncover any additional elements for us to predict customer response. After studying the accuracy and ROC/AUC metric, we realized that XG-Boost (Extreme Gradient Boosting) is the best model to use to understand customer response as we can accurately predict up-to 85%.
+
+Moving forward, given more computational memory and power, we think through cross-validation (GridSearchCV, RandomizedSearchCV, etc.) we can further improve the prediction power of our model. Also, inclusion of some more attributes like "Cause of Vehicle Damage", "How long customer had previous insurance?" and a more clear definition of "Policy Sales Channel" numbers can make our analysis and model stronger.
+
+## REFERENCES
+
+https://www.analyticsvidhya.com/blog/2020/07/10-techniques-to-deal-with-class-imbalance-in-machine-learning/
+
+https://www.analyticsvidhya.com/blog/2021/06/tune-hyperparameters-with-gridsearchcv/#h2_6
+
+https://www.kaggle.com/kaushiksuresh147/customer-segementation-rf-lgbm/notebook
+
+https://www.r-bloggers.com/2021/04/random-forest-in-r/
+
+https://www.analyticsvidhya.com/blog/2016/01/xgboost-algorithm-easy-steps/
+
+
+
+
