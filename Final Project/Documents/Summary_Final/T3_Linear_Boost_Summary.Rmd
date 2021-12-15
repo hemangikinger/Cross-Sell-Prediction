@@ -8,6 +8,7 @@ output:
     number_sections: true
     toc: yes
     toc_float: yes
+    css: bootstrap.css
   pdf_document:
     toc: yes
     toc_depth: '3'
