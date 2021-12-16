@@ -1,0 +1,325 @@
+---
+title: "Insurance Cross-Sell Model"
+author: "T3 - Linear Boost"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+  code_folding: hide
+number_sections: true
+toc: yes
+toc_float: yes
+pdf_document:
+  toc: yes
+toc_depth: '3'
+---
+
+```{r init, include=F}
+# The package "ezids" (EZ Intro to Data Science) includes a lot of the helper functions we developed for the course. 
+# Some of the frequently used functions are loadPkg(), xkabledply(), xkablesummary(), uzscale(), etc.
+# Once installed, load the library.
+library(ezids)
+library(tidyverse)
+library(corrplot)
+library("ggplot2")
+library(dplyr) 
+library(randomForest)
+library(e1071)
+library(caret)
+library(ROSE)
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document.
+
+SMART Problem?
+Whether a customer would be interested in an additional insurance service like vehicle Insurance is extremely helpful for the company because it can then accordingly plan its communication strategy to reach out to those customers and optimize its business model and revenue. We have following information to assist our analysis: demographics (gender, age, region code type), Vehicles (Vehicle Age, Damage), Policy (Premium, sourcing channel) etc.
+
+## Cross-Sell RAW Data
+
+```{r cross-sell RAW Data, echo=FALSE, warning=FALSE}
+
+vehicle<-read.csv("train.csv")
+
+str(vehicle)
+
+```
+
+## EDA
+
+```{r Data Distribution}
+
+xkabledply(summary(vehicle))
+
+paste0("We will be able to get a idea on the outliers here by the percentiles ( In the Annual_Premium the 3rd quartile is 39400 and the max is 540165 this represents the outliers in this column)")
+
+```
+
+## Response Variable Trend
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+vehicle %>% ggplot(aes(x=as.factor(Response))) +geom_bar(stat = "count") + ggtitle("Response Variable Count")
+
+table(vehicle$Response)/dim(vehicle)[1]  # 12.26%
+
+paste0("From the plot we can say that there's imbalance in response. The individuals interested in purchasing a vehicle insurance are only 12.6%.")
+```
+
+
+## Variable Conversion
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+# Assign integer values to character variables
+
+vehicle$Gender <- ifelse(vehicle$Gender == 'Male', 0,1)
+
+vehicle$Vehicle_Damage <- ifelse(vehicle$Vehicle_Damage == 'Yes', 1,0)
+
+vehicle$Vehicle_Age <- ifelse(vehicle$Vehicle_Age == '> 2 Years', 2,ifelse(vehicle$Vehicle_Age == '1-2 Year', 1, 0))
+
+#vehicle.cor= cor(vehicle[,c(3,4,5,6,9,10,11,12)])
+vehicle.cor= cor(vehicle)
+xkabledply(vehicle.cor)
+
+corrplot(vehicle.cor, method = "number", type="upper", col=NULL, title="Vehicle Correlation", use="pairwise.complete.obs")
+
+vehicle$Region_Code <-ifelse(vehicle$Region_Code %in% c(9,23,25,33,44,50,34,36,42), 1, # "Northeast" 
+                             ifelse(vehicle$Region_Code %in% c(18,17,26,39,55,19,20,27,29,31,38,46), 2, #"Midwest"
+                                    ifelse(vehicle$Region_Code %in% c(10,11,12,13,24,37,45,51,54,1,21,28,47,5,22,40,48), 3, #"South"
+                                           ifelse(vehicle$Region_Code %in% c(4,8,16,35,30,49,32,56,2,6,15,41,53),4,5)))) # "West","Hogwarts"
+
+vehicle_xgb <- vehicle
+
+vehicle$Gender <- factor(vehicle$Gender)
+vehicle$Driving_License <- factor(vehicle$Driving_License)
+vehicle$Previously_Insured <- factor(vehicle$Previously_Insured)
+vehicle$Vehicle_Damage <- factor(vehicle$Vehicle_Damage)
+vehicle$Vehicle_Age <- factor(vehicle$Vehicle_Age)
+
+vehicle$Region_Code <- factor(vehicle$Region_Code)
+
+corrplot(cor (vehicle[c(3,9,10,11,12)]), method = "number", type="upper", col=NULL)
+
+vehicle$Response <- factor(vehicle$Response)
+
+#
+```
+
+## Data Balancing
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+vehicle <- ovun.sample(Response ~ ., data = vehicle, method = "over",N = 668798)$data
+
+vehicle_xgb <- ovun.sample(Response ~ ., data = vehicle_xgb, method = "over",N = 668798)$data
+
+```
+
+## Feature Selection
+
+```{r}
+loadPkg("leaps")
+
+regnonlin.forward10 <- regsubsets(Response ~ ., data = vehicle, nvmax = 10, method = "exhaustive")  
+
+plot(regnonlin.forward10, scale = "adjr2", main = "Adjusted R^2")
+
+summary(regnonlin.forward10)
+
+```
+
+## Logistic Regression
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+mod1 <- glm(Response ~ Vehicle_Age + Vehicle_Damage, data = vehicle, binomial(link = "logit"))
+
+summary(mod1)
+
+expcoeff = exp(coef(mod1))
+
+```
+All the coefficients are found significant (small p-values). All features have a positive effect on customer response. These are reasonable results and confirms our common beliefs.  
+
+We can also easily obtain the growth/decay factors for each variable. Notice that these factors apply to the odds-ratio, not the odds of being accepted. Nonetheless, these growth and decay factors are very useful in our analysis. The factors are the exponential of the coefficients:  
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+expcoeff = exp(coef(mod1))
+
+xkabledply( as.table(expcoeff), title = "Exponential of coefficients of regression model" )
+
+```
+
+From these results, we can say, for example:
+
+* The effect of having a vehicle for 1 to 2 years, compared to less than 1 year, is boosting by a factor of `r format(expcoeff[2],digit=4)`, for the log(odds-ratio).  Any factor less than 1 represents a negative effect.
+* The effect of having a vehicle for more than 2 years, compared to less than 1 year, is boosting even more, by a factor of `r format(expcoeff[3],digit=4)`, again, for the log(odds-ratio).  
+* Customers with vehicle damage are likely to respond more, by a factor of `r format(expcoeff[4],digit=4)`, again, for the log(odds-ratio). 
+
+**Confusion Matrix**
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+loadPkg("regclass")
+
+xkabledply( confusion_matrix(mod1), title = "Confusion matrix from Logit Model" )
+
+unloadPkg("regclass")
+
+paste0 ("Accuracy of the model is ",round((187714 + 327603)/668798 * 100,2), "%. But since we have an unbalanced data, Confusion Matrix won't be the best metric")
+
+```
+**Receiver-Operator-Characteristic (ROC) curve and Area-Under-Curve (AUC)**
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+loadPkg("pROC") 
+
+prob <- predict(mod1, type = "response" )
+vehicle$prob<- prob
+h <- roc(Response~prob, data=vehicle)
+auc(h) # area-under-curve prefer 0.8 or higher.
+plot(h)
+
+paste0("Area under the curve is greater than 80% which indicates that the model is a good fit.")
+
+```
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+loadPkg("rpart")
+loadPkg("caret")
+
+
+confusionMatrixResultDf = data.frame( Depth=numeric(0), Accuracy= numeric(0), Sensitivity=numeric(0), Specificity=numeric(0), Pos.Pred.Value=numeric(0), Neg.Pred.Value=numeric(0), Precision=numeric(0), Recall=numeric(0), F1=numeric(0), Prevalence=numeric(0), Detection.Rate=numeric(0), Detection.Prevalence=numeric(0), Balanced.Accuracy=numeric(0), row.names = NULL )
+
+for (deep in 2:6) {
+  kfit <- rpart(Response ~ Vehicle_Age + Vehicle_Damage, data=vehicle, method="class", control = list(maxdepth = deep) )
+  cm = confusionMatrix( predict(kfit, type = "class"), reference = vehicle[, "Response"] ) # from caret library
+  cmaccu = cm$overall['Accuracy']
+  cmt = data.frame(Depth=deep, Accuracy = cmaccu, row.names = NULL ) # initialize a row of the metrics 
+  cmt = cbind( cmt, data.frame( t(cm$byClass) ) ) # the dataframe of the transpose, with k valued added in front
+  confusionMatrixResultDf = rbind(confusionMatrixResultDf, cmt)
+  # print("Other metrics : ")
+}
+
+unloadPkg("caret")
+
+```
+
+**DECISION TREES Confusion Matrix**
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+xkabledply(confusionMatrixResultDf, title="Response Classification Trees summary with varying MaxDepth")
+
+```
+
+**DECISION TREES Tree Plot**
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+loadPkg("rpart.plot")
+rpart.plot(kfit)
+loadPkg("rattle") # For fancyRpartPlot (Trees) Answer "no" on installing from binary source
+fancyRpartPlot(kfit)
+```
+
+## Extreme Gradient Boosting
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+library(xgboost)
+
+vehicle_xgb$Response <- factor(vehicle_xgb$Response)
+
+# Convert the Species factor to an integer class starting at 0
+# This is picky, but it's a requirement for XGBoost
+species = vehicle_xgb$Response
+label = as.integer(vehicle_xgb$Response)-1
+vehicle_xgb$Response = NULL
+
+n = nrow(vehicle_xgb)
+train.index = sample(n,floor(0.75*n))
+train.data = as.matrix(vehicle_xgb[train.index,])
+train.label = label[train.index]
+test.data = as.matrix(vehicle_xgb[-train.index,])
+test.label = label[-train.index]
+
+# Transform the two data sets into xgb.Matrix
+xgb.train = xgb.DMatrix(data=train.data,label=train.label)
+xgb.test = xgb.DMatrix(data=test.data,label=test.label)
+
+num_class = length(levels(species))
+params = list(
+  booster="gbtree",
+  eta=0.1,
+  max_depth=10,
+  gamma=3,
+  subsample=0.75,
+  colsample_bytree=0.75,
+  objective="multi:softprob",
+  eval_metric="merror",
+  num_class=num_class
+)
+
+
+# Train the XGBoost classifer
+xgb=xgb.train(
+  params=params,
+  data=xgb.train,
+  nrounds=500,
+  nthreads=1,
+  early_stopping_rounds=10,
+  watchlist=list(val1=xgb.train,val2=xgb.test),
+  verbose=0
+)
+
+# Review the final model and results
+xgb
+
+xgb.pred = predict(xgb,test.data,reshape=T)
+xgb.pred = as.data.frame(xgb.pred)
+colnames(xgb.pred) = levels(species)
+
+xgb.pred$prediction = apply(xgb.pred,1,function(x) colnames(xgb.pred)[which.max(x)])
+xgb.pred$label = levels(species)[test.label+1]
+
+# Calculate the final accuracy
+result = sum(xgb.pred$prediction==xgb.pred$label)/nrow(xgb.pred)
+print(paste("Final Accuracy =",sprintf("%1.2f%%", 100*result)))
+
+```
+
+**XGBoost Confusion Matrix**
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+loadPkg("regclass")
+xkabledply( table(as.numeric(xgb.pred$prediction),as.numeric(xgb.pred$label)), title = "Confusion matrix from XGBoost Model" )
+unloadPkg("regclass")
+
+paste0 ("Accuracy of the model is ",round((60525 + 81257)/167200 * 100,2), "%.")
+
+
+```
+**XGBoost Receiver-Operator-Characteristic (ROC) curve and Area-Under-Curve (AUC)**
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+h <- roc(as.numeric(label)~as.numeric(prediction), data=xgb.pred)
+auc(h) # area-under-curve prefer 0.8 or higher.
+plot(h)
+
+
+paste0("Area under the curve is greater than 80% which indicates that the model is a good fit.")
+
+```
+
+

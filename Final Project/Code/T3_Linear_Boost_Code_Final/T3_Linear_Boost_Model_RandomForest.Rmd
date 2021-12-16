@@ -1,0 +1,178 @@
+---
+title: "Insurance Cross-Sell Model"
+author: "T3 - Linear Boost"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+  code_folding: hide
+number_sections: true
+toc: yes
+toc_float: yes
+pdf_document:
+  toc: yes
+toc_depth: '3'
+---
+
+```{r init, include=F}
+# The package "ezids" (EZ Intro to Data Science) includes a lot of the helper functions we developed for the course. 
+# Some of the frequently used functions are loadPkg(), xkabledply(), xkablesummary(), uzscale(), etc.
+# Once installed, load the library.
+library(ezids)
+library(tidyverse)
+library(corrplot)
+library("ggplot2")
+library(dplyr) 
+library(randomForest)
+library(e1071)
+library(caret)
+library(ROSE)
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document.
+
+SMART Problem?
+Whether a customer would be interested in an additional insurance service like vehicle Insurance is extremely helpful for the company because it can then accordingly plan its communication strategy to reach out to those customers and optimize its business model and revenue. We have following information to assist our analysis: demographics (gender, age, region code type), Vehicles (Vehicle Age, Damage), Policy (Premium, sourcing channel) etc.
+
+## Cross-Sell RAW Data
+
+```{r cross-sell RAW Data, echo=FALSE, warning=FALSE}
+
+vehicle<-read.csv("train.csv")
+
+str(vehicle)
+
+```
+
+## EDA
+
+```{r Data Distribution}
+
+xkabledply(summary(vehicle))
+
+paste0("We will be able to get a idea on the outliers here by the percentiles ( In the Annual_Premium the 3rd quartile is 39400 and the max is 540165 this represents the outliers in this column)")
+
+```
+
+## Response Variable Trend
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+vehicle %>% ggplot(aes(x=as.factor(Response))) +geom_bar(stat = "count") + ggtitle("Response Variable Count")
+
+table(vehicle$Response)/dim(vehicle)[1]  # 12.26%
+
+paste0("From the plot we can say that there's imbalance in response. The individuals interested in purchasing a vehicle insurance are only 12.6%.")
+```
+
+
+## Variable Conversion
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+# Assign integer values to character variables
+
+vehicle$Gender <- ifelse(vehicle$Gender == 'Male', 0,1)
+
+vehicle$Vehicle_Damage <- ifelse(vehicle$Vehicle_Damage == 'Yes', 1,0)
+
+vehicle$Vehicle_Age <- ifelse(vehicle$Vehicle_Age == '> 2 Years', 2,ifelse(vehicle$Vehicle_Age == '1-2 Year', 1, 0))
+
+#vehicle.cor= cor(vehicle[,c(3,4,5,6,9,10,11,12)])
+vehicle.cor= cor(vehicle)
+xkabledply(vehicle.cor)
+
+corrplot(vehicle.cor, method = "number", type="upper", col=NULL, title="Vehicle Correlation", use="pairwise.complete.obs")
+
+vehicle$Region_Code <-ifelse(vehicle$Region_Code %in% c(9,23,25,33,44,50,34,36,42), 1, # "Northeast" 
+                             ifelse(vehicle$Region_Code %in% c(18,17,26,39,55,19,20,27,29,31,38,46), 2, #"Midwest"
+                                    ifelse(vehicle$Region_Code %in% c(10,11,12,13,24,37,45,51,54,1,21,28,47,5,22,40,48), 3, #"South"
+                                           ifelse(vehicle$Region_Code %in% c(4,8,16,35,30,49,32,56,2,6,15,41,53),4,5)))) # "West","Hogwarts"
+
+vehicle_xgb <- vehicle
+
+vehicle$Gender <- factor(vehicle$Gender)
+vehicle$Driving_License <- factor(vehicle$Driving_License)
+vehicle$Previously_Insured <- factor(vehicle$Previously_Insured)
+vehicle$Vehicle_Damage <- factor(vehicle$Vehicle_Damage)
+vehicle$Vehicle_Age <- factor(vehicle$Vehicle_Age)
+
+vehicle$Region_Code <- factor(vehicle$Region_Code)
+
+corrplot(cor (vehicle[c(3,9,10,11,12)]), method = "number", type="upper", col=NULL)
+
+vehicle$Response <- factor(vehicle$Response)
+
+remove(vehicle)
+#
+```
+
+## Data Balancing
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+vehicle_xgb <- ovun.sample(Response ~ ., data = vehicle_xgb, method = "under",N = 93420)$data
+
+```
+
+
+## Random Forest
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+library(randomForest)
+
+train <- sample(nrow(vehicle_xgb), 0.75*nrow(vehicle_xgb), replace = FALSE)
+TrainSet <- vehicle_xgb[train,]
+ValidSet <- vehicle_xgb[-train,]
+
+rf <- randomForest(Response ~ Vehicle_Age + Vehicle_Damage, data = TrainSet, proximity=FALSE)
+
+summary(rf)
+```
+
+
+**Random Forest Confusion Matrix**
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+predTrain <- predict(rf, TrainSet, type = "Response")
+table(predTrain, TrainSet$Response)
+predValid <- predict(rf, ValidSet, type = "Response")
+
+# Checking classification accuracy
+mean(predValid == ValidSet$Response)
+table(predValid,ValidSet$Response)
+
+
+loadPkg("regclass")
+xkabledply( table(predValid,ValidSet$Response), title = "Confusion matrix from Random Forest Model" )
+unloadPkg("regclass")
+
+paste0 ("Accuracy of the model is ",round((55955 + 98190)/200640 * 100,2), "%.")
+
+```
+
+**Random Forest Receiver-Operator-Characteristic (ROC) curve and Area-Under-Curve (AUC)**
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+
+library("pROC")
+
+prob <- predict(rf, type = "response" )
+TrainSet$prob<- prob
+h <- roc(Response~prob, data=TrainSet)
+auc(h) # area-under-curve prefer 0.8 or higher.
+plot(h)
+
+
+paste0("Area under the curve is greater than 80% which indicates that the model is a good fit.")
+
+```
